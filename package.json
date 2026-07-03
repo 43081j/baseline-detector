@@ -1,0 +1,58 @@
+{
+  "name": "baseline-detector",
+  "version": "0.0.0-dev",
+  "description": "Detects the baseline target of a project based on source code.",
+  "main": "./lib/main.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/main.d.ts",
+      "default": "./lib/main.js"
+    }
+  },
+  "files": [
+    "lib",
+    "!lib/**/*.test.js",
+    "!lib/**/*.test.d.ts"
+  ],
+  "scripts": {
+    "build:clean": "node -e \"require('fs').rmSync('./lib', { recursive: true, force: true })\"",
+    "build": "npm run build:clean && tsgo",
+    "lint:js": "oxlint src",
+    "lint:format": "oxfmt --check src",
+    "lint": "npm run lint:js && npm run lint:format",
+    "format": "oxfmt --write src",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "baseline",
+    "caniuse",
+    "web-features"
+  ],
+  "author": "James Garbutt (https://github.com/43081j)",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://github.com/43081j/baseline-detector#readme",
+  "bugs": {
+    "url": "https://github.com/43081j/baseline-detector/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/43081j/baseline-detector.git"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@typescript/native-preview": "^7.0.0-dev.20260509.2",
+    "@vitest/coverage-v8": "^4.1.5",
+    "oxfmt": "^0.48.0",
+    "oxlint": "^1.63.0",
+    "vitest": "^4.1.5"
+  },
+  "dependencies": {
+    "@ast-grep/napi": "^0.44.0",
+    "ignore": "^7.0.5",
+    "web-features": "^3.32.0"
+  }
+}
