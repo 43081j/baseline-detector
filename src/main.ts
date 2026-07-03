@@ -39,6 +39,33 @@ const SYNTAX_RULES = new Map<string, Rule>([
   ['classes.private_class_fields', { kind: 'private_property_identifier' }],
   ['grammar.template_literals', { kind: 'template_string' }],
   ['statements.for_await_of', { pattern: 'for await ($A of $B) $C' }],
+  ['operators.exponentiation_assignment', { pattern: '$A **= $B' }],
+  ['statements.generator_function', { pattern: 'function* $F($$$A) { $$$B }' }],
+  ['operators.generator_function', { pattern: 'function* ($$$A) { $$$B }' }],
+  [
+    'statements.async_generator_function',
+    { pattern: 'async function* $F($$$A) { $$$B }' },
+  ],
+  [
+    'operators.async_generator_function',
+    { pattern: 'async function* ($$$A) { $$$B }' },
+  ],
+  ['operators.import', { pattern: 'import($$$A)' }],
+  ['operators.import_meta', { pattern: 'import.meta' }],
+  ['operators.new_target', { pattern: 'new.target' }],
+  [
+    'statements.try_catch.optional_catch_binding',
+    { pattern: 'try { $$$A } catch { $$$B }' },
+  ],
+  ['classes.static.initialization_blocks', { kind: 'class_static_block' }],
+  [
+    'classes.private_class_methods',
+    {
+      kind: 'method_definition',
+      has: { field: 'name', kind: 'private_property_identifier' },
+    },
+  ],
+  ['grammar.numeric_separators', { kind: 'number', regex: '_' }],
 ]);
 
 interface TypeScriptContext {
