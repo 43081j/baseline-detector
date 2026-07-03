@@ -1,284 +1,18 @@
 import { parse, Lang } from '@ast-grep/napi';
-import type { Rule, SgNode } from '@ast-grep/napi';
 import { glob, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import ignore from 'ignore';
 import { features } from 'web-features';
-import type * as TS from 'typescript';
+import { createTypeScriptContext } from './typescript.js';
+import type { TypeContext } from './typescript.js';
+import { detectors } from './detectors.js';
 
 export interface DetectOptions {
   cwd?: string;
 }
 
-type TypeScript = typeof import('typescript');
-
-function loadTypeScript(cwd: string): TypeScript | null {
-  try {
-    const projectRequire = createRequire(path.join(cwd, 'package.json'));
-    return projectRequire('typescript') as TypeScript;
-  } catch {
-    return null;
-  }
-}
-
-const SYNTAX_RULES = new Map<string, Rule>([
-  ['operators.optional_chaining', { kind: 'optional_chain' }],
-  ['operators.nullish_coalescing', { pattern: '$A ?? $B' }],
-  ['operators.nullish_coalescing_assignment', { pattern: '$A ??= $B' }],
-  ['operators.logical_or_assignment', { pattern: '$A ||= $B' }],
-  ['operators.logical_and_assignment', { pattern: '$A &&= $B' }],
-  ['operators.exponentiation', { pattern: '$A ** $B' }],
-  ['operators.spread', { kind: 'spread_element' }],
-  [
-    'operators.destructuring',
-    { any: [{ kind: 'object_pattern' }, { kind: 'array_pattern' }] },
-  ],
-  ['operators.await', { kind: 'await_expression' }],
-  ['functions.arrow_functions', { kind: 'arrow_function' }],
-  ['classes.private_class_fields', { kind: 'private_property_identifier' }],
-  ['grammar.template_literals', { kind: 'template_string' }],
-  ['statements.for_await_of', { pattern: 'for await ($A of $B) $C' }],
-  ['operators.exponentiation_assignment', { pattern: '$A **= $B' }],
-  ['statements.generator_function', { pattern: 'function* $F($$$A) { $$$B }' }],
-  ['operators.generator_function', { pattern: 'function* ($$$A) { $$$B }' }],
-  [
-    'statements.async_generator_function',
-    { pattern: 'async function* $F($$$A) { $$$B }' },
-  ],
-  [
-    'operators.async_generator_function',
-    { pattern: 'async function* ($$$A) { $$$B }' },
-  ],
-  ['operators.import', { pattern: 'import($$$A)' }],
-  ['operators.import_meta', { pattern: 'import.meta' }],
-  ['operators.new_target', { pattern: 'new.target' }],
-  [
-    'statements.try_catch.optional_catch_binding',
-    { pattern: 'try { $$$A } catch { $$$B }' },
-  ],
-  ['classes.static.initialization_blocks', { kind: 'class_static_block' }],
-  [
-    'classes.private_class_methods',
-    {
-      kind: 'method_definition',
-      has: { field: 'name', kind: 'private_property_identifier' },
-    },
-  ],
-  ['grammar.numeric_separators', { kind: 'number', regex: '_' }],
-]);
-
-interface TypeScriptContext {
-  ts: TypeScript;
-  program: TS.Program;
-  checker: TS.TypeChecker;
-}
-
-interface TypeContext extends TypeScriptContext {
-  sourceFile: TS.SourceFile;
-}
-
-interface Detector {
-  rule: Rule;
-  visit(
-    node: SgNode,
-    emit: (featureId: string) => void,
-    types: TypeContext | null,
-  ): void;
-}
-
-const upsertMap = <TKey, TValue>(
-  map: Map<TKey, TValue>,
-  key: TKey,
-  defaultValue: TValue,
-): TValue => {
-  let existing = map.get(key);
-  if (!existing) {
-    existing = defaultValue;
-    map.set(key, existing);
-  }
-  return existing;
-};
-
-function typeNames(checker: TS.TypeChecker, type: TS.Type): Set<string> {
-  const names = new Set<string>();
-  const add = (name: string | undefined): void => {
-    if (!name) return;
-    names.add(name);
-    if (name.endsWith('Constructor')) {
-      names.add(name.slice(0, -'Constructor'.length));
-    }
-  };
-
-  const constituents = type.isUnionOrIntersection() ? type.types : [type];
-  for (const constituent of constituents) {
-    add((constituent.getSymbol() ?? constituent.aliasSymbol)?.getName());
-    const baseTypes = (
-      constituent as Partial<TS.InterfaceType>
-    ).getBaseTypes?.();
-    for (const base of baseTypes ?? []) {
-      add((base.getSymbol() ?? base.aliasSymbol)?.getName());
-    }
-    const apparent = checker.getApparentType(constituent);
-    if (apparent !== constituent) {
-      add((apparent.getSymbol() ?? apparent.aliasSymbol)?.getName());
-    }
-  }
-  return names;
-}
-
-function nodeAt(sourceFile: TS.SourceFile, pos: number): TS.Node {
-  let deepest: TS.Node = sourceFile;
-  const visit = (node: TS.Node): void => {
-    if (pos >= node.getStart(sourceFile) && pos < node.getEnd()) {
-      deepest = node;
-      node.forEachChild(visit);
-    }
-  };
-  sourceFile.forEachChild(visit);
-  return deepest;
-}
-
-function isGlobalBinding(types: TypeContext, node: SgNode): boolean {
-  const target = nodeAt(types.sourceFile, node.range().start.index);
-  const declarations =
-    types.checker.getSymbolAtLocation(target)?.getDeclarations() ?? [];
-  if (declarations.length === 0) return true;
-  return declarations.some((declaration) => {
-    const declaredIn = declaration.getSourceFile();
-    return (
-      declaredIn.isDeclarationFile && !types.ts.isExternalModule(declaredIn)
-    );
-  });
-}
-
-function createDetectors(): Detector[] {
-  const detectors: Detector[] = [];
-  const globals = new Map<string, string>();
-  const members = new Map<string, Map<string, string>>();
-
-  for (const [featureId, feature] of Object.entries(features)) {
-    if (!feature.compat_features) continue;
-
-    for (const compatPath of feature.compat_features) {
-      const segments = compatPath.split('.');
-
-      let leaf: string[] | null = null;
-      if (segments[0] === 'api') {
-        // api.* paths, e.g. `api.fetch`.
-        leaf = segments.slice(1);
-      } else if (segments[0] === 'javascript' && segments[1] === 'builtins') {
-        // javascript.builtins.* paths, e.g. `javascript.builtins.Promise`.
-        leaf = segments.slice(2);
-      }
-
-      if (leaf) {
-        const [type, member, extra] = leaf;
-        if (type && !member) {
-          upsertMap(globals, type, featureId);
-        } else if (type && member && !extra) {
-          const memberMap = upsertMap(members, type, new Map());
-          upsertMap(memberMap, member, featureId);
-        }
-        continue;
-      }
-
-      if (segments[0] === 'javascript') {
-        const rule = SYNTAX_RULES.get(segments.slice(1).join('.'));
-        if (rule)
-          detectors.push({ rule, visit: (_node, emit) => emit(featureId) });
-      }
-    }
-  }
-
-  // find all identifiers that are globals matching features
-  detectors.push({
-    rule: { kind: 'identifier' },
-    visit: (node, emit, types) => {
-      const featureId = globals.get(node.text());
-      if (featureId && (!types || isGlobalBinding(types, node))) {
-        emit(featureId);
-      }
-    },
-  });
-
-  // find all member expressions that match features
-  detectors.push({
-    rule: { kind: 'member_expression' },
-    visit: (node, emit, types) => {
-      if (!types) return;
-      const property = node.field('property');
-      if (!property) return;
-
-      const parent = nodeAt(
-        types.sourceFile,
-        property.range().start.index,
-      ).parent;
-      if (!parent || !types.ts.isPropertyAccessExpression(parent)) return;
-
-      const type = types.checker.getTypeAtLocation(parent.expression);
-      const member = property.text();
-      for (const name of typeNames(types.checker, type)) {
-        const featureId = members.get(name)?.get(member);
-        if (featureId) {
-          emit(featureId);
-          return;
-        }
-      }
-    },
-  });
-
-  return detectors;
-}
-
-const detectors = createDetectors();
-
-function createProgram(
-  ts: TypeScript,
-  cwd: string,
-  files: string[],
-): TS.Program {
-  let options: TS.CompilerOptions = {
-    allowJs: true,
-    target: ts.ScriptTarget.ESNext,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    lib: ['lib.esnext.d.ts', 'lib.dom.d.ts', 'lib.dom.iterable.d.ts'],
-    skipLibCheck: true,
-    noEmit: true,
-    allowNonTsExtensions: true,
-  };
-
-  const configPath = ts.findConfigFile(cwd, ts.sys.fileExists, 'tsconfig.json');
-  if (configPath) {
-    const { config } = ts.readConfigFile(configPath, ts.sys.readFile);
-    const parsed = ts.parseJsonConfigFileContent(
-      config,
-      ts.sys,
-      path.dirname(configPath),
-      undefined,
-      configPath,
-    );
-    options = {
-      ...parsed.options,
-      allowJs: true,
-      noEmit: true,
-      skipLibCheck: true,
-    };
-  }
-
-  return ts.createProgram(files, options);
-}
-
-function createTypeScriptContext(
-  cwd: string,
-  files: string[],
-): TypeScriptContext | null {
-  const ts = loadTypeScript(cwd);
-  if (!ts) return null;
-  const program = createProgram(ts, cwd, files);
-  return { ts, program, checker: program.getTypeChecker() };
-}
+// high = widely available, low = newly available, false = limited availability
+export type BaselineStatus = 'high' | 'low' | false;
 
 const SOURCE_GLOBS = [
   '**/*.js',
@@ -340,7 +74,7 @@ async function getSourceFiles(cwd: string): Promise<string[]> {
   return files;
 }
 
-export async function detect(
+export async function detectFeatures(
   options?: DetectOptions,
 ): Promise<Map<string, Set<string>>> {
   const cwd = options?.cwd ?? process.cwd();
@@ -373,6 +107,59 @@ export async function detect(
     }
   }
 
-  // TODO: turn the per-file feature map into the final baseline report.
   return results;
+}
+
+async function collectFeatureIds(
+  options?: DetectOptions,
+): Promise<Set<string>> {
+  const byFile = await detectFeatures(options);
+  const all = new Set<string>();
+  for (const ids of byFile.values()) {
+    for (const id of ids) {
+      all.add(id);
+    }
+  }
+  return all;
+}
+
+function baselineStatusOf(featureId: string): BaselineStatus | null {
+  const feature = features[featureId];
+  if (!feature || feature.kind !== 'feature') return null;
+  return feature.status.baseline;
+}
+
+export async function detectBaselineTarget(
+  options?: DetectOptions,
+): Promise<BaselineStatus> {
+  const ids = await collectFeatureIds(options);
+
+  let target: BaselineStatus = 'high';
+  for (const id of ids) {
+    const status = baselineStatusOf(id);
+    if (status === false) return false;
+    if (status === 'low') target = 'low';
+  }
+  return target;
+}
+
+export async function detectBaselineYear(
+  options?: DetectOptions,
+): Promise<number | null> {
+  const ids = await collectFeatureIds(options);
+
+  let year: number | null = null;
+  for (const id of ids) {
+    const feature = features[id];
+    const status =
+      feature && feature.kind === 'feature' ? feature.status : undefined;
+    if (!status || status.baseline === false || !status.baseline_low_date) {
+      return null;
+    }
+    const featureYear = Number(status.baseline_low_date.slice(0, 4));
+    if (year === null || featureYear > year) {
+      year = featureYear;
+    }
+  }
+  return year;
 }
