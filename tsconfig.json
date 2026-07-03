@@ -2,7 +2,7 @@
   "compilerOptions": {
     "outDir": "./lib",
     "rootDir": "./src",
-    "module": "node18",
+    "module": "node20",
     "target": "esnext",
     "types": ["node"],
     "sourceMap": false,
