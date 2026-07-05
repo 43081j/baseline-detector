@@ -1,4 +1,5 @@
 import { parse, Lang } from '@ast-grep/napi';
+import type { SgNode } from '@ast-grep/napi';
 import { glob, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import ignore from 'ignore';
@@ -6,6 +7,7 @@ import { features } from 'web-features';
 import { createTypeScriptContext } from './typescript.js';
 import type { TypeContext } from './typescript.js';
 import { detectors } from './detectors.js';
+import { extractScripts } from './html.js';
 
 export interface DetectOptions {
   cwd?: string;
@@ -23,7 +25,18 @@ const SOURCE_GLOBS = [
   '**/*.mts',
   '**/*.cts',
   '**/*.tsx',
+  '**/*.vue',
+  '**/*.svelte',
 ];
+
+// Files whose JavaScript lives inside `<script>` blocks rather than being the
+// whole file. Their scripts aren't part of the TypeScript program, so they're
+// analysed without type information.
+const EMBEDDED_SCRIPT_EXTENSIONS = new Set(['.vue', '.svelte']);
+
+function hasEmbeddedScripts(file: string): boolean {
+  return EMBEDDED_SCRIPT_EXTENSIONS.has(path.extname(file));
+}
 
 function langForFile(file: string): Lang {
   switch (path.extname(file)) {
@@ -74,32 +87,48 @@ async function getSourceFiles(cwd: string): Promise<string[]> {
   return files;
 }
 
+function runDetectors(
+  root: SgNode,
+  types: TypeContext | null,
+  emit: (featureId: string) => void,
+): void {
+  for (const { rule, visit } of detectors) {
+    for (const node of root.findAll({ rule })) {
+      visit(node, emit, types);
+    }
+  }
+}
+
 export async function detectFeatures(
   options?: DetectOptions,
 ): Promise<Map<string, Set<string>>> {
   const cwd = options?.cwd ?? process.cwd();
   const files = await getSourceFiles(cwd);
 
-  const baseContext = createTypeScriptContext(cwd, files);
+  const baseContext = createTypeScriptContext(
+    cwd,
+    files.filter((file) => !hasEmbeddedScripts(file)),
+  );
 
   const results = new Map<string, Set<string>>();
   for (const file of files) {
     // oxlint-disable-next-line no-await-in-loop
     const source = await readFile(file, 'utf8');
-    const root = parse(langForFile(file), source).root();
-
-    const sourceFile = baseContext?.program.getSourceFile(file);
-    const types: TypeContext | null =
-      baseContext && sourceFile ? { ...baseContext, sourceFile } : null;
 
     const found = new Set<string>();
     const emit = (featureId: string): void => {
       found.add(featureId);
     };
-    for (const { rule, visit } of detectors) {
-      for (const node of root.findAll({ rule })) {
-        visit(node, emit, types);
+
+    if (hasEmbeddedScripts(file)) {
+      for (const script of extractScripts(source)) {
+        runDetectors(parse(script.lang, script.code).root(), null, emit);
       }
+    } else {
+      const sourceFile = baseContext?.program.getSourceFile(file);
+      const types: TypeContext | null =
+        baseContext && sourceFile ? { ...baseContext, sourceFile } : null;
+      runDetectors(parse(langForFile(file), source).root(), types, emit);
     }
 
     if (found.size > 0) {
