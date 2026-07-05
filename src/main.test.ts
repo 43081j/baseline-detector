@@ -70,6 +70,41 @@ function byFile(result: Map<string, Set<string>>): Record<string, string[]> {
   return out;
 }
 
+function findGlobalFeature(
+  baseline: 'low' | false,
+): { global: string; year: number | null } | null {
+  const globals = new Map<string, string>();
+  for (const [id, feature] of Object.entries(features)) {
+    if (feature.kind !== 'feature' || !feature.compat_features) continue;
+    for (const compatPath of feature.compat_features) {
+      const segments = compatPath.split('.');
+      let name: string | undefined;
+      if (segments[0] === 'api' && segments.length === 2) {
+        name = segments[1];
+      } else if (
+        segments[0] === 'javascript' &&
+        segments[1] === 'builtins' &&
+        segments.length === 3
+      ) {
+        name = segments[2];
+      }
+      if (name && !globals.has(name)) globals.set(name, id);
+    }
+  }
+
+  for (const [global, id] of globals) {
+    const feature = features[id];
+    if (!feature || feature.kind !== 'feature') continue;
+    if (feature.status.baseline !== baseline) continue;
+    const lowDate = feature.status.baseline_low_date;
+    return { global, year: lowDate ? Number(lowDate.slice(0, 4)) : null };
+  }
+  return null;
+}
+
+const lowFeature = findGlobalFeature('low');
+const limitedFeature = findGlobalFeature(false);
+
 describe('detectFeatures', () => {
   let dir: string;
 
@@ -150,6 +185,22 @@ describe('detectBaselineTarget', () => {
     await writeProject(dir, { 'plain.js': 'var a = 1;' });
     expect(await detectBaselineTarget({ cwd: dir })).toBe('high');
   });
+
+  it.skipIf(!lowFeature)(
+    'is low when a newly available feature is used',
+    async () => {
+      await writeProject(dir, { 'index.js': `${lowFeature!.global};` });
+      expect(await detectBaselineTarget({ cwd: dir })).toBe('low');
+    },
+  );
+
+  it.skipIf(!limitedFeature)(
+    'is false when a limited availability feature is used',
+    async () => {
+      await writeProject(dir, { 'index.js': `${limitedFeature!.global};` });
+      expect(await detectBaselineTarget({ cwd: dir })).toBe(false);
+    },
+  );
 });
 
 describe('detectBaselineYear', () => {
@@ -176,8 +227,24 @@ describe('detectBaselineYear', () => {
     expect(await detectBaselineYear({ cwd: dir })).toBe(2022);
   });
 
+  it.skipIf(!lowFeature)(
+    'returns the year of a newly available feature',
+    async () => {
+      await writeProject(dir, { 'index.js': `${lowFeature!.global};` });
+      expect(await detectBaselineYear({ cwd: dir })).toBe(lowFeature!.year);
+    },
+  );
+
   it('returns null when no features are detected', async () => {
     await writeProject(dir, { 'plain.js': 'var a = 1;' });
     expect(await detectBaselineYear({ cwd: dir })).toBeNull();
   });
+
+  it.skipIf(!limitedFeature)(
+    'returns null when a limited availability feature is used',
+    async () => {
+      await writeProject(dir, { 'index.js': `${limitedFeature!.global};` });
+      expect(await detectBaselineYear({ cwd: dir })).toBeNull();
+    },
+  );
 });
