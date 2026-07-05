@@ -72,7 +72,7 @@ function byFile(result: Map<string, Set<string>>): Record<string, string[]> {
 
 function findGlobalFeature(
   baseline: 'low' | false,
-): { global: string; year: number | null } | null {
+): { id: string; global: string; year: number | null } | null {
   const globals = new Map<string, string>();
   for (const [id, feature] of Object.entries(features)) {
     if (feature.kind !== 'feature' || !feature.compat_features) continue;
@@ -97,7 +97,7 @@ function findGlobalFeature(
     if (!feature || feature.kind !== 'feature') continue;
     if (feature.status.baseline !== baseline) continue;
     const lowDate = feature.status.baseline_low_date;
-    return { global, year: lowDate ? Number(lowDate.slice(0, 4)) : null };
+    return { id, global, year: lowDate ? Number(lowDate.slice(0, 4)) : null };
   }
   return null;
 }
@@ -176,29 +176,41 @@ describe('detectBaselineTarget', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('is high when only widely available features are used', async () => {
+  it('is high with no reason when only widely available features are used', async () => {
     const cwd = path.join(fixturesDir, 'js');
-    expect(await detectBaselineTarget({ cwd })).toBe('high');
+    expect(await detectBaselineTarget({ cwd })).toEqual({
+      status: 'high',
+      reason: null,
+    });
   });
 
   it('defaults to high when nothing is detected', async () => {
     await writeProject(dir, { 'plain.js': 'var a = 1;' });
-    expect(await detectBaselineTarget({ cwd: dir })).toBe('high');
+    expect(await detectBaselineTarget({ cwd: dir })).toEqual({
+      status: 'high',
+      reason: null,
+    });
   });
 
   it.skipIf(!lowFeature)(
-    'is low when a newly available feature is used',
+    'is low with the responsible feature when a newly available feature is used',
     async () => {
       await writeProject(dir, { 'index.js': `${lowFeature!.global};` });
-      expect(await detectBaselineTarget({ cwd: dir })).toBe('low');
+      expect(await detectBaselineTarget({ cwd: dir })).toEqual({
+        status: 'low',
+        reason: lowFeature!.id,
+      });
     },
   );
 
   it.skipIf(!limitedFeature)(
-    'is false when a limited availability feature is used',
+    'is false with the responsible feature when a limited availability feature is used',
     async () => {
       await writeProject(dir, { 'index.js': `${limitedFeature!.global};` });
-      expect(await detectBaselineTarget({ cwd: dir })).toBe(false);
+      expect(await detectBaselineTarget({ cwd: dir })).toEqual({
+        status: false,
+        reason: limitedFeature!.id,
+      });
     },
   );
 });
