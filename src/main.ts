@@ -16,6 +16,12 @@ export interface DetectOptions {
 // high = widely available, low = newly available, false = limited availability
 export type BaselineStatus = 'high' | 'low' | false;
 
+export interface BaselineTarget {
+  status: BaselineStatus;
+  // The feature that determined the status
+  reason: string | null;
+}
+
 const SOURCE_GLOBS = [
   '**/*.js',
   '**/*.jsx',
@@ -160,14 +166,14 @@ function baselineStatusOf(featureId: string): BaselineStatus | null {
 
 export async function detectBaselineTarget(
   options?: DetectOptions,
-): Promise<BaselineStatus> {
+): Promise<BaselineTarget> {
   const ids = await collectFeatureIds(options);
 
-  let target: BaselineStatus = 'high';
+  let target: BaselineTarget = { status: 'high', reason: null };
   for (const id of ids) {
     const status = baselineStatusOf(id);
-    if (status === false) return false;
-    if (status === 'low') target = 'low';
+    if (status === false) return { status: false, reason: id };
+    if (status === 'low') target = { status: 'low', reason: id };
   }
   return target;
 }

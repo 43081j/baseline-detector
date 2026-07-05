@@ -22,7 +22,7 @@ import {
 } from 'baseline-detector';
 
 const target = await detectBaselineTarget();
-console.log(target); // e.g. 'low'
+console.log(target); // e.g. { status: 'low', reason: 'array-flat' }
 
 // The Baseline year the project targets (newest feature it relies on),
 // or null if any feature is not yet Baseline.
@@ -49,7 +49,7 @@ Source files are discovered from the directory's `tsconfig.json` `rootDir` (fall
 | Export | Description |
 | --- | --- |
 | `detectFeatures(options?)` | Resolves to a `Map<string, Set<string>>` of feature IDs detected per file. |
-| `detectBaselineTarget(options?)` | Resolves to the project's overall `BaselineStatus` (`'high'`, `'low'`, or `false`). |
+| `detectBaselineTarget(options?)` | Resolves to a `BaselineTarget`, `{ status, reason }`, where `status` is the project's overall `BaselineStatus` (`'high'`, `'low'`, or `false`) and `reason` is the feature ID that determined it (`null` when `status` is `'high'`). |
 | `detectBaselineYear(options?)` | Resolves to the newest Baseline year the project targets, or `null`. |
 
 ## License
