@@ -1,0 +1,55 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`detects features in the js fixture 1`] = `
+{
+  "index.js": [
+    "async-await",
+    "fetch",
+    "functions",
+    "let-const",
+    "nullish-coalescing",
+    "object-object",
+    "spread",
+  ],
+}
+`;
+
+exports[`detects features in the svelte fixture 1`] = `
+{
+  "Component.svelte": [
+    "async-await",
+    "fetch",
+    "functions",
+    "let-const",
+    "nullish-coalescing",
+    "object-object",
+  ],
+}
+`;
+
+exports[`detects features in the ts fixture 1`] = `
+{
+  "index.ts": [
+    "array-find",
+    "async-await",
+    "fetch",
+    "functions",
+    "let-const",
+    "nullish-coalescing",
+    "object-object",
+  ],
+}
+`;
+
+exports[`detects features in the vue fixture 1`] = `
+{
+  "Component.vue": [
+    "async-await",
+    "fetch",
+    "functions",
+    "let-const",
+    "nullish-coalescing",
+    "object-object",
+  ],
+}
+`;

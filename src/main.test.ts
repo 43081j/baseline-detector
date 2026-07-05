@@ -1,6 +1,9 @@
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { expect, it } from 'vitest';
 import { features } from 'web-features';
 import { SYNTAX_RULES } from './detectors.js';
+import { detectFeatures } from './main.js';
 
 // Features we don't detect, usually because they don't have a baseline date
 const KNOWN_UNDETECTED = new Set([
@@ -34,4 +37,21 @@ it('detects every JS-relevant web-feature except the known exceptions', () => {
   }
 
   expect(undetected.sort()).toEqual([...KNOWN_UNDETECTED].sort());
+});
+
+const FIXTURES = ['js', 'ts', 'vue', 'svelte'];
+const fixturesDir = fileURLToPath(new URL('../test/fixtures', import.meta.url));
+
+it.each(FIXTURES)('detects features in the %s fixture', async (name) => {
+  const cwd = path.join(fixturesDir, name);
+  const result = await detectFeatures({ cwd });
+
+  const normalized = [...result]
+    .map(([file, ids]): [string, string[]] => [
+      path.relative(cwd, file),
+      [...ids].sort(),
+    ])
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  expect(Object.fromEntries(normalized)).toMatchSnapshot();
 });
