@@ -10,7 +10,11 @@
       "default": "./lib/main.js"
     }
   },
+  "bin": {
+    "baseline-detector": "bin/cli.js"
+  },
   "files": [
+    "bin",
     "lib",
     "!lib/**/*.test.js",
     "!lib/**/*.test.d.ts"
