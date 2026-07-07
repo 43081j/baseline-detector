@@ -12,6 +12,21 @@ npm install baseline-detector
 
 TypeScript is an optional peer dependency. When it is available, type information is used to improve detection accuracy.
 
+## Usage as a CLI
+
+```sh
+npx baseline-detector target
+# high
+
+npx baseline-detector year
+# 2023
+
+npx baseline-detector features
+# /code/foo.ts
+#   async-await
+#   let-const
+```
+
 ## Usage
 
 ```ts
