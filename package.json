@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "build:clean": "node -e \"require('fs').rmSync('./lib', { recursive: true, force: true })\"",
-    "build": "npm run build:clean && tsgo",
+    "build": "npm run build:clean && tsc",
     "lint:js": "oxlint src",
     "lint:format": "oxfmt --check src",
     "lint": "npm run lint:js && npm run lint:format",
@@ -47,11 +47,10 @@
     "url": "git+https://github.com/43081j/baseline-detector.git"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
-    "@typescript/native-preview": "^7.0.0-dev.20260509.2",
-    "@vitest/coverage-v8": "^4.1.5",
-    "oxfmt": "^0.57.0",
-    "oxlint": "^1.63.0",
+    "@types/node": "^26.1.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "oxfmt": "^0.61.0",
+    "oxlint": "^1.76.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
