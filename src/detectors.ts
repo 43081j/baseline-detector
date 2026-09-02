@@ -57,6 +57,10 @@ export const SYNTAX_RULES = new Map<string, Rule>([
     'statements.import.import_attributes.type_css',
     { kind: 'import_attribute', regex: 'css' },
   ],
+  [
+    'statements.import.import_attributes.type_text',
+    { kind: 'import_attribute', regex: 'text' },
+  ],
 ]);
 
 export interface Detector {
