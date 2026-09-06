@@ -7,7 +7,9 @@ import { features } from 'web-features';
 import { SYNTAX_RULES } from './detectors.js';
 import {
   detectBaselineTarget,
+  detectBaselineTargetForFeatures,
   detectBaselineYear,
+  detectBaselineYearForFeatures,
   detectFeatures,
 } from './main.js';
 
@@ -257,6 +259,113 @@ describe('detectBaselineYear', () => {
     async () => {
       await writeProject(dir, { 'index.js': `${limitedFeature!.global};` });
       expect(await detectBaselineYear({ cwd: dir })).toBeNull();
+    },
+  );
+});
+
+describe('detectBaselineTargetForFeatures', () => {
+  it('defaults to high when given no features', async () => {
+    expect(await detectBaselineTargetForFeatures(new Map())).toEqual({
+      status: 'high',
+      reason: null,
+    });
+  });
+
+  it('is high with no reason when every feature is widely available', async () => {
+    const input = new Map([
+      ['a.js', new Set(['fetch'])],
+      ['b.js', new Set(['nullish-coalescing', 'structured-clone'])],
+    ]);
+    expect(await detectBaselineTargetForFeatures(input)).toEqual({
+      status: 'high',
+      reason: null,
+    });
+  });
+
+  it('ignores unknown feature ids', async () => {
+    const input = new Map([['a.js', new Set(['fetch', 'not-a-real-feature'])]]);
+    expect(await detectBaselineTargetForFeatures(input)).toEqual({
+      status: 'high',
+      reason: null,
+    });
+  });
+
+  it.skipIf(!lowFeature)(
+    'is low with the responsible feature when a newly available feature is present',
+    async () => {
+      const input = new Map([['a.js', new Set(['fetch', lowFeature!.id])]]);
+      expect(await detectBaselineTargetForFeatures(input)).toEqual({
+        status: 'low',
+        reason: lowFeature!.id,
+      });
+    },
+  );
+
+  it.skipIf(!limitedFeature)(
+    'is false with the responsible feature when a limited availability feature is present',
+    async () => {
+      const input = new Map([['a.js', new Set(['fetch', limitedFeature!.id])]]);
+      expect(await detectBaselineTargetForFeatures(input)).toEqual({
+        status: false,
+        reason: limitedFeature!.id,
+      });
+    },
+  );
+
+  it.skipIf(!lowFeature || !limitedFeature)(
+    'prefers limited availability over newly available',
+    async () => {
+      const input = new Map([
+        ['a.js', new Set([lowFeature!.id])],
+        ['b.js', new Set([limitedFeature!.id])],
+      ]);
+      expect(await detectBaselineTargetForFeatures(input)).toEqual({
+        status: false,
+        reason: limitedFeature!.id,
+      });
+    },
+  );
+});
+
+describe('detectBaselineYearForFeatures', () => {
+  it('returns null when given no features', async () => {
+    expect(await detectBaselineYearForFeatures(new Map())).toBeNull();
+  });
+
+  it('takes the maximum year across files', async () => {
+    const input = new Map([
+      ['old.js', new Set(['nullish-coalescing'])],
+      ['new.js', new Set(['structured-clone'])],
+    ]);
+    expect(await detectBaselineYearForFeatures(input)).toBe(2022);
+  });
+
+  it('deduplicates features seen in multiple files', async () => {
+    const input = new Map([
+      ['a.js', new Set(['nullish-coalescing'])],
+      ['b.js', new Set(['nullish-coalescing'])],
+    ]);
+    expect(await detectBaselineYearForFeatures(input)).toBe(2020);
+  });
+
+  it('returns null when a feature id is unknown', async () => {
+    const input = new Map([['a.js', new Set(['fetch', 'not-a-real-feature'])]]);
+    expect(await detectBaselineYearForFeatures(input)).toBeNull();
+  });
+
+  it.skipIf(!lowFeature)(
+    'returns the year of a newly available feature',
+    async () => {
+      const input = new Map([['a.js', new Set(['fetch', lowFeature!.id])]]);
+      expect(await detectBaselineYearForFeatures(input)).toBe(lowFeature!.year);
+    },
+  );
+
+  it.skipIf(!limitedFeature)(
+    'returns null when a limited availability feature is present',
+    async () => {
+      const input = new Map([['a.js', new Set(['fetch', limitedFeature!.id])]]);
+      expect(await detectBaselineYearForFeatures(input)).toBeNull();
     },
   );
 });
