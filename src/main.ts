@@ -146,11 +146,10 @@ export async function detectFeatures(
 }
 
 async function collectFeatureIds(
-  options?: DetectOptions,
+  input: Map<string, Set<string>>,
 ): Promise<Set<string>> {
-  const byFile = await detectFeatures(options);
   const all = new Set<string>();
-  for (const ids of byFile.values()) {
+  for (const ids of input.values()) {
     for (const id of ids) {
       all.add(id);
     }
@@ -164,10 +163,10 @@ function baselineStatusOf(featureId: string): BaselineStatus | null {
   return feature.status.baseline;
 }
 
-export async function detectBaselineTarget(
-  options?: DetectOptions,
+export async function detectBaselineTargetForFeatures(
+  input: Map<string, Set<string>>,
 ): Promise<BaselineTarget> {
-  const ids = await collectFeatureIds(options);
+  const ids = await collectFeatureIds(input);
 
   let target: BaselineTarget = { status: 'high', reason: null };
   for (const id of ids) {
@@ -178,10 +177,18 @@ export async function detectBaselineTarget(
   return target;
 }
 
-export async function detectBaselineYear(
+export async function detectBaselineTarget(
   options?: DetectOptions,
+): Promise<BaselineTarget> {
+  const result = await detectFeatures(options);
+  const target = await detectBaselineTargetForFeatures(result);
+  return target;
+}
+
+export async function detectBaselineYearForFeatures(
+  input: Map<string, Set<string>>,
 ): Promise<number | null> {
-  const ids = await collectFeatureIds(options);
+  const ids = await collectFeatureIds(input);
 
   let year: number | null = null;
   for (const id of ids) {
@@ -196,5 +203,13 @@ export async function detectBaselineYear(
       year = featureYear;
     }
   }
+  return year;
+}
+
+export async function detectBaselineYear(
+  options?: DetectOptions,
+): Promise<number | null> {
+  const result = await detectFeatures(options);
+  const year = await detectBaselineYearForFeatures(result);
   return year;
 }

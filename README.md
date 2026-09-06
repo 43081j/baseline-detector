@@ -51,6 +51,20 @@ for (const [file, ids] of features) {
 }
 ```
 
+If you already have the result of `detectFeatures`, the `*ForFeatures` variants compute the target and year from it without analysing the sources again:
+
+```ts
+import {
+  detectFeatures,
+  detectBaselineTargetForFeatures,
+  detectBaselineYearForFeatures,
+} from 'baseline-detector';
+
+const features = await detectFeatures();
+const target = await detectBaselineTargetForFeatures(features);
+const year = await detectBaselineYearForFeatures(features);
+```
+
 By default the project in the current working directory is analysed. Pass a `cwd` to point elsewhere:
 
 ```ts
@@ -66,6 +80,8 @@ Source files are discovered from the directory's `tsconfig.json` `rootDir` (fall
 | `detectFeatures(options?)` | Resolves to a `Map<string, Set<string>>` of feature IDs detected per file. |
 | `detectBaselineTarget(options?)` | Resolves to a `BaselineTarget`, `{ status, reason }`, where `status` is the project's overall `BaselineStatus` (`'high'`, `'low'`, or `false`) and `reason` is the feature ID that determined it (`null` when `status` is `'high'`). |
 | `detectBaselineYear(options?)` | Resolves to the newest Baseline year the project targets, or `null`. |
+| `detectBaselineTargetForFeatures(features)` | As `detectBaselineTarget`, but computed from an already detected `Map<string, Set<string>>` of features. |
+| `detectBaselineYearForFeatures(features)` | As `detectBaselineYear`, but computed from an already detected `Map<string, Set<string>>` of features. |
 
 ## License
 
