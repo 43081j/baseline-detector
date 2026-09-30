@@ -13,6 +13,10 @@ export interface DetectOptions {
   cwd?: string;
 }
 
+export interface DetectSourceOptions {
+  fileName?: string;
+}
+
 // high = widely available, low = newly available, false = limited availability
 export type BaselineStatus = 'high' | 'low' | false;
 
@@ -105,6 +109,35 @@ function runDetectors(
   }
 }
 
+function detectInFile(
+  file: string,
+  source: string,
+  types: TypeContext | null,
+): Set<string> {
+  const found = new Set<string>();
+  const emit = (featureId: string): void => {
+    found.add(featureId);
+  };
+
+  if (hasEmbeddedScripts(file)) {
+    for (const script of extractScripts(source)) {
+      runDetectors(parse(script.lang, script.code).root(), null, emit);
+    }
+  } else {
+    runDetectors(parse(langForFile(file), source).root(), types, emit);
+  }
+  return found;
+}
+
+export async function detectFeaturesForSource(
+  source: string,
+  options?: DetectSourceOptions,
+): Promise<Map<string, Set<string>>> {
+  const fileName = options?.fileName ?? '<source>';
+  const found = detectInFile(fileName, source, null);
+  return found.size > 0 ? new Map([[fileName, found]]) : new Map();
+}
+
 export async function detectFeatures(
   options?: DetectOptions,
 ): Promise<Map<string, Set<string>>> {
@@ -121,21 +154,12 @@ export async function detectFeatures(
     // oxlint-disable-next-line no-await-in-loop
     const source = await readFile(file, 'utf8');
 
-    const found = new Set<string>();
-    const emit = (featureId: string): void => {
-      found.add(featureId);
-    };
-
-    if (hasEmbeddedScripts(file)) {
-      for (const script of extractScripts(source)) {
-        runDetectors(parse(script.lang, script.code).root(), null, emit);
-      }
-    } else {
-      const sourceFile = baseContext?.program.getSourceFile(file);
-      const types: TypeContext | null =
-        baseContext && sourceFile ? { ...baseContext, sourceFile } : null;
-      runDetectors(parse(langForFile(file), source).root(), types, emit);
-    }
+    const sourceFile = hasEmbeddedScripts(file)
+      ? undefined
+      : baseContext?.program.getSourceFile(file);
+    const types: TypeContext | null =
+      baseContext && sourceFile ? { ...baseContext, sourceFile } : null;
+    const found = detectInFile(file, source, types);
 
     if (found.size > 0) {
       results.set(file, found);

@@ -11,6 +11,7 @@ import {
   detectBaselineYear,
   detectBaselineYearForFeatures,
   detectFeatures,
+  detectFeaturesForSource,
 } from './main.js';
 
 // Features we don't detect, usually because they don't have a baseline date
@@ -164,6 +165,42 @@ describe('detectFeatures', () => {
     expect(byFile(await detectFeatures({ cwd: dir }))).toEqual({
       'used.js': ['fetch'],
     });
+  });
+});
+
+describe('detectFeaturesForSource', () => {
+  it('detects features in an in-memory source', async () => {
+    const result = await detectFeaturesForSource('x = a ?? b;');
+    expect(byFile(result)).toEqual({
+      '<source>': ['nullish-coalescing'],
+    });
+  });
+
+  it('keys the result by the given file name', async () => {
+    const result = await detectFeaturesForSource('x = a ?? b;', {
+      fileName: 'bundle.js',
+    });
+    expect([...result.keys()]).toEqual(['bundle.js']);
+  });
+
+  it('parses using the language implied by the file name', async () => {
+    const result = await detectFeaturesForSource('const x = a as string;', {
+      fileName: 'input.ts',
+    });
+    expect(byFile(result)['input.ts']).toContain('let-const');
+  });
+
+  it('detects features in embedded scripts', async () => {
+    const result = await detectFeaturesForSource(
+      '<script>x = a ?? b;</script>',
+      { fileName: 'App.vue' },
+    );
+    expect(byFile(result)).toEqual({ 'App.vue': ['nullish-coalescing'] });
+  });
+
+  it('returns an empty map when nothing is detected', async () => {
+    const result = await detectFeaturesForSource('x = 1;');
+    expect(result.size).toBe(0);
   });
 });
 

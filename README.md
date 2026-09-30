@@ -78,6 +78,7 @@ Source files are discovered from the directory's `tsconfig.json` `rootDir` (fall
 | Export | Description |
 | --- | --- |
 | `detectFeatures(options?)` | Resolves to a `Map<string, Set<string>>` of feature IDs detected per file. |
+| `detectFeaturesForSource(source, options?)` | As `detectFeatures`, but for a single in-memory source. `options.fileName` (default `'<source>'`) keys the result and picks the language by extension. Runs without type information, so member usages like `arr.toSorted()` are not detected. |
 | `detectBaselineTarget(options?)` | Resolves to a `BaselineTarget`, `{ status, reason }`, where `status` is the project's overall `BaselineStatus` (`'high'`, `'low'`, or `false`) and `reason` is the feature ID that determined it (`null` when `status` is `'high'`). |
 | `detectBaselineYear(options?)` | Resolves to the newest Baseline year the project targets, or `null`. |
 | `detectBaselineTargetForFeatures(features)` | As `detectBaselineTarget`, but computed from an already detected `Map<string, Set<string>>` of features. |
