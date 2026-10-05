@@ -8,8 +8,10 @@ import { SYNTAX_RULES } from './detectors.js';
 import {
   detectBaselineTarget,
   detectBaselineTargetForFeatures,
+  detectBaselineTargetForSource,
   detectBaselineYear,
   detectBaselineYearForFeatures,
+  detectBaselineYearForSource,
   detectFeatures,
   detectFeaturesForSource,
 } from './main.js';
@@ -169,37 +171,36 @@ describe('detectFeatures', () => {
 });
 
 describe('detectFeaturesForSource', () => {
-  it('detects features in an in-memory source', async () => {
-    const result = await detectFeaturesForSource('x = a ?? b;');
+  it('detects features in an in-memory source', () => {
+    const result = detectFeaturesForSource('x = a ?? b;');
     expect(byFile(result)).toEqual({
       '<source>': ['nullish-coalescing'],
     });
   });
 
-  it('keys the result by the given file name', async () => {
-    const result = await detectFeaturesForSource('x = a ?? b;', {
+  it('keys the result by the given file name', () => {
+    const result = detectFeaturesForSource('x = a ?? b;', {
       fileName: 'bundle.js',
     });
     expect([...result.keys()]).toEqual(['bundle.js']);
   });
 
-  it('parses using the language implied by the file name', async () => {
-    const result = await detectFeaturesForSource('const x = a as string;', {
+  it('parses using the language implied by the file name', () => {
+    const result = detectFeaturesForSource('const x = a as string;', {
       fileName: 'input.ts',
     });
     expect(byFile(result)['input.ts']).toContain('let-const');
   });
 
-  it('detects features in embedded scripts', async () => {
-    const result = await detectFeaturesForSource(
-      '<script>x = a ?? b;</script>',
-      { fileName: 'App.vue' },
-    );
+  it('detects features in embedded scripts', () => {
+    const result = detectFeaturesForSource('<script>x = a ?? b;</script>', {
+      fileName: 'App.vue',
+    });
     expect(byFile(result)).toEqual({ 'App.vue': ['nullish-coalescing'] });
   });
 
-  it('returns an empty map when nothing is detected', async () => {
-    const result = await detectFeaturesForSource('x = 1;');
+  it('returns an empty map when nothing is detected', () => {
+    const result = detectFeaturesForSource('x = 1;');
     expect(result.size).toBe(0);
   });
 });
@@ -301,27 +302,27 @@ describe('detectBaselineYear', () => {
 });
 
 describe('detectBaselineTargetForFeatures', () => {
-  it('defaults to high when given no features', async () => {
-    expect(await detectBaselineTargetForFeatures(new Map())).toEqual({
+  it('defaults to high when given no features', () => {
+    expect(detectBaselineTargetForFeatures(new Map())).toEqual({
       status: 'high',
       reason: null,
     });
   });
 
-  it('is high with no reason when every feature is widely available', async () => {
+  it('is high with no reason when every feature is widely available', () => {
     const input = new Map([
       ['a.js', new Set(['fetch'])],
       ['b.js', new Set(['nullish-coalescing', 'structured-clone'])],
     ]);
-    expect(await detectBaselineTargetForFeatures(input)).toEqual({
+    expect(detectBaselineTargetForFeatures(input)).toEqual({
       status: 'high',
       reason: null,
     });
   });
 
-  it('ignores unknown feature ids', async () => {
+  it('ignores unknown feature ids', () => {
     const input = new Map([['a.js', new Set(['fetch', 'not-a-real-feature'])]]);
-    expect(await detectBaselineTargetForFeatures(input)).toEqual({
+    expect(detectBaselineTargetForFeatures(input)).toEqual({
       status: 'high',
       reason: null,
     });
@@ -329,9 +330,9 @@ describe('detectBaselineTargetForFeatures', () => {
 
   it.skipIf(!lowFeature)(
     'is low with the responsible feature when a newly available feature is present',
-    async () => {
+    () => {
       const input = new Map([['a.js', new Set(['fetch', lowFeature!.id])]]);
-      expect(await detectBaselineTargetForFeatures(input)).toEqual({
+      expect(detectBaselineTargetForFeatures(input)).toEqual({
         status: 'low',
         reason: lowFeature!.id,
       });
@@ -340,9 +341,9 @@ describe('detectBaselineTargetForFeatures', () => {
 
   it.skipIf(!limitedFeature)(
     'is false with the responsible feature when a limited availability feature is present',
-    async () => {
+    () => {
       const input = new Map([['a.js', new Set(['fetch', limitedFeature!.id])]]);
-      expect(await detectBaselineTargetForFeatures(input)).toEqual({
+      expect(detectBaselineTargetForFeatures(input)).toEqual({
         status: false,
         reason: limitedFeature!.id,
       });
@@ -351,12 +352,12 @@ describe('detectBaselineTargetForFeatures', () => {
 
   it.skipIf(!lowFeature || !limitedFeature)(
     'prefers limited availability over newly available',
-    async () => {
+    () => {
       const input = new Map([
         ['a.js', new Set([lowFeature!.id])],
         ['b.js', new Set([limitedFeature!.id])],
       ]);
-      expect(await detectBaselineTargetForFeatures(input)).toEqual({
+      expect(detectBaselineTargetForFeatures(input)).toEqual({
         status: false,
         reason: limitedFeature!.id,
       });
@@ -365,44 +366,112 @@ describe('detectBaselineTargetForFeatures', () => {
 });
 
 describe('detectBaselineYearForFeatures', () => {
-  it('returns null when given no features', async () => {
-    expect(await detectBaselineYearForFeatures(new Map())).toBeNull();
+  it('returns null when given no features', () => {
+    expect(detectBaselineYearForFeatures(new Map())).toBeNull();
   });
 
-  it('takes the maximum year across files', async () => {
+  it('takes the maximum year across files', () => {
     const input = new Map([
       ['old.js', new Set(['nullish-coalescing'])],
       ['new.js', new Set(['structured-clone'])],
     ]);
-    expect(await detectBaselineYearForFeatures(input)).toBe(2022);
+    expect(detectBaselineYearForFeatures(input)).toBe(2022);
   });
 
-  it('deduplicates features seen in multiple files', async () => {
+  it('deduplicates features seen in multiple files', () => {
     const input = new Map([
       ['a.js', new Set(['nullish-coalescing'])],
       ['b.js', new Set(['nullish-coalescing'])],
     ]);
-    expect(await detectBaselineYearForFeatures(input)).toBe(2020);
+    expect(detectBaselineYearForFeatures(input)).toBe(2020);
   });
 
-  it('returns null when a feature id is unknown', async () => {
+  it('returns null when a feature id is unknown', () => {
     const input = new Map([['a.js', new Set(['fetch', 'not-a-real-feature'])]]);
-    expect(await detectBaselineYearForFeatures(input)).toBeNull();
+    expect(detectBaselineYearForFeatures(input)).toBeNull();
   });
 
   it.skipIf(!lowFeature)(
     'returns the year of a newly available feature',
-    async () => {
+    () => {
       const input = new Map([['a.js', new Set(['fetch', lowFeature!.id])]]);
-      expect(await detectBaselineYearForFeatures(input)).toBe(lowFeature!.year);
+      expect(detectBaselineYearForFeatures(input)).toBe(lowFeature!.year);
     },
   );
 
   it.skipIf(!limitedFeature)(
     'returns null when a limited availability feature is present',
-    async () => {
+    () => {
       const input = new Map([['a.js', new Set(['fetch', limitedFeature!.id])]]);
-      expect(await detectBaselineYearForFeatures(input)).toBeNull();
+      expect(detectBaselineYearForFeatures(input)).toBeNull();
     },
   );
+});
+
+describe('detectBaselineTargetForSource', () => {
+  it('defaults to high when nothing is detected', () => {
+    expect(detectBaselineTargetForSource('x = 1;')).toEqual({
+      status: 'high',
+      reason: null,
+    });
+  });
+
+  it.skipIf(!lowFeature)(
+    'is low with the responsible feature when a newly available feature is used',
+    () => {
+      expect(detectBaselineTargetForSource(`${lowFeature!.global};`)).toEqual({
+        status: 'low',
+        reason: lowFeature!.id,
+      });
+    },
+  );
+
+  it.skipIf(!limitedFeature)(
+    'is false with the responsible feature when a limited availability feature is used',
+    () => {
+      expect(
+        detectBaselineTargetForSource(`${limitedFeature!.global};`),
+      ).toEqual({
+        status: false,
+        reason: limitedFeature!.id,
+      });
+    },
+  );
+
+  it('respects the language implied by the file name', () => {
+    expect(
+      detectBaselineTargetForSource('<script>x = a ?? b;</script>', {
+        fileName: 'App.vue',
+      }),
+    ).toEqual({ status: 'high', reason: null });
+  });
+});
+
+describe('detectBaselineYearForSource', () => {
+  it('returns the latest baseline year among detected features', () => {
+    expect(detectBaselineYearForSource('x = a ?? b; structuredClone(x);')).toBe(
+      2022,
+    );
+  });
+
+  it('returns null when nothing is detected', () => {
+    expect(detectBaselineYearForSource('x = 1;')).toBeNull();
+  });
+
+  it.skipIf(!limitedFeature)(
+    'returns null when a limited availability feature is used',
+    () => {
+      expect(
+        detectBaselineYearForSource(`${limitedFeature!.global};`),
+      ).toBeNull();
+    },
+  );
+
+  it('respects the language implied by the file name', () => {
+    expect(
+      detectBaselineYearForSource('<script>x = a ?? b;</script>', {
+        fileName: 'App.vue',
+      }),
+    ).toBe(2020);
+  });
 });
