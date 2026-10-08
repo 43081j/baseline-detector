@@ -2,28 +2,19 @@ import { parse, Lang } from '@ast-grep/napi';
 import { glob, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import ignore from 'ignore';
-import { features } from 'web-features';
 import { createTypeScriptContext } from './typescript.js';
 import type { TypeContext } from './typescript.js';
 import { detectorLang, detectors } from './detectors.js';
 import { extractEmbedded } from './embedded.js';
+import { statuses } from './lookups.js';
+import type {
+  BaselineStatus,
+  BaselineTarget,
+  DetectOptions,
+  DetectSourceOptions,
+} from './types.js';
 
-export interface DetectOptions {
-  cwd?: string;
-}
-
-export interface DetectSourceOptions {
-  fileName?: string;
-}
-
-// high = widely available, low = newly available, false = limited availability
-export type BaselineStatus = 'high' | 'low' | false;
-
-export interface BaselineTarget {
-  status: BaselineStatus;
-  // The feature that determined the status
-  reason: string | null;
-}
+export type * from './types.js';
 
 const SOURCE_GLOBS = [
   '**/*.js',
@@ -190,9 +181,7 @@ function collectFeatureIds(input: Map<string, Set<string>>): Set<string> {
 }
 
 function baselineStatusOf(featureId: string): BaselineStatus | null {
-  const feature = features[featureId];
-  if (!feature || feature.kind !== 'feature') return null;
-  return feature.status.baseline;
+  return statuses.get(featureId)?.[0] ?? null;
 }
 
 export function detectBaselineTargetForFeatures(
@@ -233,13 +222,8 @@ export function detectBaselineYearForFeatures(
 
   let year: number | null = null;
   for (const id of ids) {
-    const feature = features[id];
-    const status =
-      feature && feature.kind === 'feature' ? feature.status : undefined;
-    if (!status || status.baseline === false || !status.baseline_low_date) {
-      return null;
-    }
-    const featureYear = Number(status.baseline_low_date.slice(0, 4));
+    const featureYear = statuses.get(id)?.[1];
+    if (!featureYear) return null;
     if (year === null || featureYear > year) {
       year = featureYear;
     }

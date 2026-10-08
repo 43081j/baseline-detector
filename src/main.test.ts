@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { features } from 'web-features';
-import { SYNTAX_RULES } from './detection/javascript.js';
+import { JAVASCRIPT_RULES } from './detection/javascript-rules.js';
 import {
   detectBaselineTarget,
   detectBaselineTargetForFeatures,
@@ -30,7 +30,7 @@ function isDetected(compatFeatures: string[]): boolean {
       compatPath.startsWith('api.') ||
       compatPath.startsWith('javascript.builtins.') ||
       (compatPath.startsWith('javascript.') &&
-        SYNTAX_RULES.has(compatPath.slice('javascript.'.length))),
+        JAVASCRIPT_RULES.has(compatPath.slice('javascript.'.length))),
   );
 }
 

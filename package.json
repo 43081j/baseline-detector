@@ -26,7 +26,8 @@
     "lint:format": "oxfmt --check src",
     "lint": "npm run lint:js && npm run lint:format",
     "format": "oxfmt --write src",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate-lookups": "node scripts/generate-lookups.ts && oxfmt --write src/lookups.ts"
   },
   "keywords": [
     "baseline",
@@ -52,12 +53,12 @@
     "oxfmt": "^0.65.0",
     "oxlint": "^1.80.0",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.5",
+    "web-features": "^3.36.0"
   },
   "dependencies": {
     "@ast-grep/napi": "^0.45.2",
-    "ignore": "^7.0.6",
-    "web-features": "^3.36.0"
+    "ignore": "^7.0.6"
   },
   "peerDependencies": {
     "typescript": "^6.0.3"
