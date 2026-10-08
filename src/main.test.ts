@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { features } from 'web-features';
-import { SYNTAX_RULES } from './detectors.js';
+import { SYNTAX_RULES } from './detection/javascript.js';
 import {
   detectBaselineTarget,
   detectBaselineTargetForFeatures,

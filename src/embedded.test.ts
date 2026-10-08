@@ -1,32 +1,32 @@
 import { Lang } from '@ast-grep/napi';
 import { describe, expect, it } from 'vitest';
-import { extractScripts } from './html.js';
+import { extractEmbedded } from './embedded.js';
 
-describe('extractScripts', () => {
+describe('extractEmbedded', () => {
   it('extracts the contents of a script block', () => {
-    const scripts = extractScripts('<script>const a = 1;</script>');
+    const scripts = extractEmbedded('<script>const a = 1;</script>');
     expect(scripts).toEqual([{ code: 'const a = 1;', lang: Lang.JavaScript }]);
   });
 
   it('defaults to JavaScript when no lang attribute is present', () => {
-    const [script] = extractScripts('<script>const a = 1;</script>');
+    const [script] = extractEmbedded('<script>const a = 1;</script>');
     expect(script?.lang).toBe(Lang.JavaScript);
   });
 
   it('defaults to JavaScript for an unrecognised lang', () => {
-    const [script] = extractScripts('<script lang="coffee">a = 1</script>');
+    const [script] = extractEmbedded('<script lang="coffee">a = 1</script>');
     expect(script?.lang).toBe(Lang.JavaScript);
   });
 
   it('detects lang="ts" as TypeScript', () => {
-    const [script] = extractScripts(
+    const [script] = extractEmbedded(
       '<script lang="ts">const a: number = 1;</script>',
     );
     expect(script?.lang).toBe(Lang.TypeScript);
   });
 
   it('detects lang="tsx" as Tsx', () => {
-    const [script] = extractScripts(
+    const [script] = extractEmbedded(
       '<script lang="tsx">const a = <div />;</script>',
     );
     expect(script?.lang).toBe(Lang.Tsx);
@@ -38,20 +38,20 @@ describe('extractScripts', () => {
       '<script>const legacy = 2;</script>',
     ].join('\n');
 
-    expect(extractScripts(source)).toEqual([
+    expect(extractEmbedded(source)).toEqual([
       { code: 'const setup = 1;', lang: Lang.TypeScript },
       { code: 'const legacy = 2;', lang: Lang.JavaScript },
     ]);
   });
 
   it('yields empty code for an empty script block', () => {
-    expect(extractScripts('<script></script>')).toEqual([
+    expect(extractEmbedded('<script></script>')).toEqual([
       { code: '', lang: Lang.JavaScript },
     ]);
   });
 
   it('returns an empty array when there are no script blocks', () => {
-    expect(extractScripts('<template><div /></template>')).toEqual([]);
+    expect(extractEmbedded('<template><div /></template>')).toEqual([]);
   });
 
   it('extracts scripts from surrounding markup', () => {
@@ -60,8 +60,35 @@ describe('extractScripts', () => {
       '<script setup lang="ts">const items = [];</script>',
     ].join('\n');
 
-    expect(extractScripts(source)).toEqual([
+    expect(extractEmbedded(source)).toEqual([
       { code: 'const items = [];', lang: Lang.TypeScript },
+    ]);
+  });
+
+  it('extracts style blocks as CSS', () => {
+    const source = [
+      '<style>a { color: red; }</style>',
+      '<style lang="css">b { color: blue; }</style>',
+    ].join('\n');
+
+    expect(extractEmbedded(source)).toEqual([
+      { code: 'a { color: red; }', lang: Lang.Css },
+      { code: 'b { color: blue; }', lang: Lang.Css },
+    ]);
+  });
+
+  it('skips style blocks in preprocessor languages', () => {
+    expect(
+      extractEmbedded('<style lang="scss">a { b { c: d; } }</style>'),
+    ).toEqual([]);
+  });
+
+  it('extracts scripts and styles in document order', () => {
+    const source = '<style>a {}</style><script>const a = 1;</script>';
+
+    expect(extractEmbedded(source)).toEqual([
+      { code: 'a {}', lang: Lang.Css },
+      { code: 'const a = 1;', lang: Lang.JavaScript },
     ]);
   });
 });

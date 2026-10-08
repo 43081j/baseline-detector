@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { detectors } from './detectors.js';
+import { detectorLang, detectors } from './detectors.js';
 import { createTypeScriptContext } from './typescript.js';
 import type { TypeContext } from './typescript.js';
 
@@ -14,7 +14,10 @@ function detect(
 ): string[] {
   const root = parse(lang, source).root();
   const found = new Set<string>();
-  for (const { rule, visit } of detectors) {
+  const targetLang = detectorLang(lang);
+  for (const detector of detectors) {
+    if (detector.lang !== targetLang) continue;
+    const { rule, visit } = detector;
     for (const node of root.findAll({ rule })) {
       visit(node, (id) => found.add(id), types);
     }
@@ -152,6 +155,129 @@ const typedCases: Array<{ name: string; code: string; expected: string[] }> = [
   },
 ];
 
+const cssCases: Array<{ name: string; code: string; expected: string[] }> = [
+  {
+    name: 'a property',
+    code: 'a { accent-color: red; }',
+    expected: ['accent-color'],
+  },
+  {
+    name: 'a property keyword',
+    code: 'a { display: grid; }',
+    expected: ['display', 'grid'],
+  },
+  {
+    name: 'a global keyword',
+    code: 'a { margin: revert-layer; }',
+    expected: ['cascade-layers', 'margin'],
+  },
+  {
+    name: 'a pseudo-class',
+    code: 'a:focus-visible {}',
+    expected: ['focus-visible'],
+  },
+  {
+    name: 'a functional pseudo-class',
+    code: 'a:has(b) {}',
+    expected: ['has'],
+  },
+  {
+    name: 'a functional pseudo-element',
+    code: '::view-transition-old(root) {}',
+    expected: ['view-transitions'],
+  },
+  {
+    name: 'an at-rule',
+    code: '@layer base;',
+    expected: ['cascade-layers'],
+  },
+  {
+    name: 'a media feature',
+    code: '@media (prefers-color-scheme: dark) {}',
+    expected: ['media-queries', 'prefers-color-scheme'],
+  },
+  {
+    name: 'a prefixed range media feature',
+    code: '@media (min-device-width: 600px) {}',
+    expected: ['device-queries', 'media-queries'],
+  },
+  {
+    name: 'a declaration nested in @container',
+    code: '.a { @container (width > 1px) { accent-color: red; } }',
+    expected: ['accent-color', 'container-queries', 'selectors'],
+  },
+  {
+    name: 'a declaration nested in @layer',
+    code: '.a { @layer x { accent-color: red; } }',
+    expected: ['accent-color', 'cascade-layers', 'selectors'],
+  },
+  {
+    name: 'a declaration nested in @media',
+    code: '.a { @media print { accent-color: red; } }',
+    expected: ['accent-color', 'media-queries', 'selectors'],
+  },
+  {
+    name: 'a declaration nested in @scope',
+    code: '.a { @scope (.b) { accent-color: red; } }',
+    expected: ['accent-color', 'scope', 'selectors'],
+  },
+  {
+    name: 'a declaration nested in @starting-style',
+    code: '.a { @starting-style { accent-color: red; } }',
+    expected: ['accent-color', 'selectors', 'starting-style'],
+  },
+  {
+    name: 'a declaration nested in @supports',
+    code: '.a { @supports (display: grid) { accent-color: red; } }',
+    expected: ['accent-color', 'selectors', 'supports'],
+  },
+  {
+    name: 'an at-rule descriptor',
+    code: '@font-face { font-display: swap; }',
+    expected: ['font-display', 'font-face'],
+  },
+  {
+    name: 'a function',
+    code: 'a { color: color-mix(in srgb, red, blue); }',
+    expected: ['color', 'color-mix'],
+  },
+  {
+    name: 'identifiers case-insensitively',
+    code: 'A { COLOR: currentcolor; transform: TRANSLATEX(1PX); }',
+    expected: ['color', 'currentcolor', 'transforms2d'],
+  },
+  {
+    name: 'a function-valued property subfeature',
+    code: 'a { animation-timeline: scroll(); }',
+    expected: ['scroll-driven-animations'],
+  },
+  {
+    name: 'the shape() function',
+    code: 'a { clip-path: shape(from 0 0, line to 10px 10px); }',
+    expected: ['clip-path', 'shape-function'],
+  },
+  {
+    name: 'a unit',
+    code: 'a { width: 1cap; }',
+    expected: ['cap', 'width-height'],
+  },
+  {
+    name: 'a dynamic viewport unit',
+    code: 'a { width: 1dvh; }',
+    expected: ['viewport-unit-variants', 'width-height'],
+  },
+  {
+    name: 'a custom property',
+    code: 'a { --x: 1px; }',
+    expected: ['custom-properties'],
+  },
+  {
+    name: 'nesting',
+    code: 'a { &:hover {} b {} }',
+    expected: ['nesting', 'user-action-pseudos'],
+  },
+];
+
 describe('detectors', () => {
   it.each(cases)('detects $name', ({ code, expected }) => {
     expect(detect(code, Lang.JavaScript, null)).toEqual(expected);
@@ -169,5 +295,15 @@ describe('detectors', () => {
   it.each(typedCases)('detects $name with types', ({ code, expected }) => {
     const types = makeTypeContext(code);
     expect(detect(code, Lang.TypeScript, types)).toEqual(expected);
+  });
+
+  it.each(cssCases)('detects CSS $name', ({ code, expected }) => {
+    expect(detect(code, Lang.Css, null)).toEqual(expected);
+  });
+
+  it('does not run JS detectors on CSS', () => {
+    expect(detect('a { content: "fetch"; }', Lang.Css, null)).toEqual([
+      'content',
+    ]);
   });
 });

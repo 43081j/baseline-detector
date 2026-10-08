@@ -1,13 +1,12 @@
 import { parse, Lang } from '@ast-grep/napi';
-import type { SgNode } from '@ast-grep/napi';
 import { glob, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import ignore from 'ignore';
 import { features } from 'web-features';
 import { createTypeScriptContext } from './typescript.js';
 import type { TypeContext } from './typescript.js';
-import { detectors } from './detectors.js';
-import { extractScripts } from './html.js';
+import { detectorLang, detectors } from './detectors.js';
+import { extractEmbedded } from './embedded.js';
 
 export interface DetectOptions {
   cwd?: string;
@@ -37,15 +36,17 @@ const SOURCE_GLOBS = [
   '**/*.tsx',
   '**/*.vue',
   '**/*.svelte',
+  '**/*.html',
+  '**/*.css',
 ];
 
-// Files whose JavaScript lives inside `<script>` blocks rather than being the
-// whole file. Their scripts aren't part of the TypeScript program, so they're
-// analysed without type information.
-const EMBEDDED_SCRIPT_EXTENSIONS = new Set(['.vue', '.svelte']);
+// Files whose sources live inside `<script>` and `<style>` blocks rather than
+// being the whole file. Their scripts aren't part of the TypeScript program, so
+// they're analysed without type information.
+const EMBEDDED_EXTENSIONS = new Set(['.vue', '.svelte', '.html']);
 
-function hasEmbeddedScripts(file: string): boolean {
-  return EMBEDDED_SCRIPT_EXTENSIONS.has(path.extname(file));
+function isEmbedded(file: string): boolean {
+  return EMBEDDED_EXTENSIONS.has(path.extname(file));
 }
 
 function langForFile(file: string): Lang {
@@ -56,9 +57,16 @@ function langForFile(file: string): Lang {
       return Lang.TypeScript;
     case '.tsx':
       return Lang.Tsx;
+    case '.css':
+      return Lang.Css;
     default:
       return Lang.JavaScript;
   }
+}
+
+// Plain script files
+function isScriptFile(file: string): boolean {
+  return !isEmbedded(file) && langForFile(file) !== Lang.Css;
 }
 
 async function inferSourceDir(cwd: string): Promise<string> {
@@ -98,11 +106,16 @@ async function getSourceFiles(cwd: string): Promise<string[]> {
 }
 
 function runDetectors(
-  root: SgNode,
+  lang: Lang,
+  code: string,
   types: TypeContext | null,
   emit: (featureId: string) => void,
 ): void {
-  for (const { rule, visit } of detectors) {
+  const root = parse(lang, code).root();
+  const targetLang = detectorLang(lang);
+  for (const detector of detectors) {
+    if (detector.lang !== targetLang) continue;
+    const { rule, visit } = detector;
     for (const node of root.findAll({ rule })) {
       visit(node, emit, types);
     }
@@ -119,12 +132,12 @@ function detectInFile(
     found.add(featureId);
   };
 
-  if (hasEmbeddedScripts(file)) {
-    for (const script of extractScripts(source)) {
-      runDetectors(parse(script.lang, script.code).root(), null, emit);
+  if (isEmbedded(file)) {
+    for (const embedded of extractEmbedded(source)) {
+      runDetectors(embedded.lang, embedded.code, null, emit);
     }
   } else {
-    runDetectors(parse(langForFile(file), source).root(), types, emit);
+    runDetectors(langForFile(file), source, types, emit);
   }
   return found;
 }
@@ -144,19 +157,16 @@ export async function detectFeatures(
   const cwd = options?.cwd ?? process.cwd();
   const files = await getSourceFiles(cwd);
 
-  const baseContext = createTypeScriptContext(
-    cwd,
-    files.filter((file) => !hasEmbeddedScripts(file)),
-  );
+  const baseContext = createTypeScriptContext(cwd, files.filter(isScriptFile));
 
   const results = new Map<string, Set<string>>();
   for (const file of files) {
     // oxlint-disable-next-line no-await-in-loop
     const source = await readFile(file, 'utf8');
 
-    const sourceFile = hasEmbeddedScripts(file)
-      ? undefined
-      : baseContext?.program.getSourceFile(file);
+    const sourceFile = isScriptFile(file)
+      ? baseContext?.program.getSourceFile(file)
+      : undefined;
     const types: TypeContext | null =
       baseContext && sourceFile ? { ...baseContext, sourceFile } : null;
     const found = detectInFile(file, source, types);
