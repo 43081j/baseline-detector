@@ -1,5 +1,6 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import ts from 'typescript';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -202,6 +203,43 @@ describe('detectFeaturesForSource', () => {
   it('returns an empty map when nothing is detected', () => {
     const result = detectFeaturesForSource('x = 1;');
     expect(result.size).toBe(0);
+  });
+});
+
+describe('detectFeaturesForSource with typescriptContext', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'baseline-detector-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('detects member features using the given program', async () => {
+    const source = 'export const v = Promise.withResolvers<number>();';
+    const fileName = path.join(dir, 'b.ts');
+    await writeFile(fileName, source);
+    const program = ts.createProgram([fileName], {
+      lib: ['lib.esnext.d.ts'],
+      noEmit: true,
+    });
+
+    const typescriptContext = {
+      ts,
+      program,
+      checker: program.getTypeChecker(),
+    };
+
+    const withTypes = detectFeaturesForSource(source, {
+      fileName,
+      typescriptContext,
+    });
+    const withoutTypes = detectFeaturesForSource(source, { fileName });
+
+    expect(byFile(withTypes)['b.ts']).toContain('promise-withresolvers');
+    expect(byFile(withoutTypes)['b.ts']).not.toContain('promise-withresolvers');
   });
 });
 

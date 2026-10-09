@@ -80,6 +80,17 @@ const target = detectBaselineTargetForSource(source);
 const year = detectBaselineYearForSource(source);
 ```
 
+These run without type information by default, so member usages like `arr.toSorted()` are not detected. If you already have a TypeScript program that contains the file (for example, inside a typed ESLint rule), pass it as `typescriptContext`:
+
+```ts
+const features = detectFeaturesForSource(source, {
+  fileName: '/path/to/project/src/input.ts',
+  typescriptContext: { ts, program, checker: program.getTypeChecker() },
+});
+```
+
+The file is looked up in the program by `fileName`, so it must match the path the program uses.
+
 By default the project in the current working directory is analysed. Pass a `cwd` to point elsewhere:
 
 ```ts
@@ -93,7 +104,7 @@ Source files are discovered from the directory's `tsconfig.json` `rootDir` (fall
 | Export | Description |
 | --- | --- |
 | `detectFeatures(options?)` | Resolves to a `Map<string, Set<string>>` of feature IDs detected per file. |
-| `detectFeaturesForSource(source, options?)` | As `detectFeatures`, but for a single in-memory source. `options.fileName` (default `'<source>'`) keys the result and picks the language by extension. Runs without type information, so member usages like `arr.toSorted()` are not detected. |
+| `detectFeaturesForSource(source, options?)` | As `detectFeatures`, but for a single in-memory source. `options.fileName` (default `'<source>'`) keys the result and picks the language by extension. `options.typescriptContext` (`{ ts, program, checker }`) enables type information for a file in that program; without it, member usages like `arr.toSorted()` are not detected. |
 | `detectBaselineTarget(options?)` | Resolves to a `BaselineTarget`, `{ status, reason }`, where `status` is the project's overall `BaselineStatus` (`'high'`, `'low'`, or `false`) and `reason` is the feature ID that determined it (`null` when `status` is `'high'`). |
 | `detectBaselineYear(options?)` | Resolves to the newest Baseline year the project targets, or `null`. |
 | `detectBaselineTargetForFeatures(features)` | As `detectBaselineTarget`, but computed from an already detected `Map<string, Set<string>>` of features. |

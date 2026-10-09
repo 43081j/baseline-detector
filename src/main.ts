@@ -5,7 +5,7 @@ import path from 'node:path';
 import ignore from 'ignore';
 import { features } from 'web-features';
 import { createTypeScriptContext } from './typescript.js';
-import type { TypeContext } from './typescript.js';
+import type { TypeContext, TypeScriptContext } from './typescript.js';
 import { detectors } from './detectors.js';
 import { extractScripts } from './html.js';
 
@@ -15,6 +15,7 @@ export interface DetectOptions {
 
 export interface DetectSourceOptions {
   fileName?: string;
+  typescriptContext?: TypeScriptContext;
 }
 
 // high = widely available, low = newly available, false = limited availability
@@ -134,7 +135,13 @@ export function detectFeaturesForSource(
   options?: DetectSourceOptions,
 ): Map<string, Set<string>> {
   const fileName = options?.fileName ?? '<source>';
-  const found = detectInFile(fileName, source, null);
+  const context = options?.typescriptContext;
+  const sourceFile = hasEmbeddedScripts(fileName)
+    ? undefined
+    : context?.program.getSourceFile(fileName);
+  const types: TypeContext | null =
+    context && sourceFile ? { ...context, sourceFile } : null;
+  const found = detectInFile(fileName, source, types);
   return found.size > 0 ? new Map([[fileName, found]]) : new Map();
 }
 
