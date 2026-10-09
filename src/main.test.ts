@@ -19,6 +19,7 @@ const KNOWN_UNDETECTED = new Set([
   'import-assertions', // deprecated `assert {}` syntax, superseded by `with`; no baseline
   'top-level-await', // needs "await outside any function" analysis; no baseline date
   'unicode-point-escapes', // lives inside string-literal contents
+  'import-defer', // Waiting for tree-sitter-javascript/tree-sitter-typescript support
 ]);
 
 function isDetected(compatFeatures: string[]): boolean {
