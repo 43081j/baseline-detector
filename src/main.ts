@@ -184,7 +184,9 @@ export async function detectFeatures(
   const cwd = options?.cwd ?? process.cwd();
   const files = await getSourceFiles(cwd);
 
-  const baseContext = createTypeScriptContext(cwd, files.filter(isScriptFile));
+  const baseContext =
+    options?.typescriptContext ??
+    createTypeScriptContext(cwd, files.filter(isScriptFile));
 
   const results = new Map<string, Set<Feature>>();
   for (const file of files) {
