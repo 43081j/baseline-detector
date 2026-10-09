@@ -1,9 +1,12 @@
+import type { TypeScriptContext } from './typescript.js';
+
 export interface DetectOptions {
   cwd?: string;
 }
 
 export interface DetectSourceOptions {
   fileName?: string;
+  typescriptContext?: TypeScriptContext;
 }
 
 // high = widely available, low = newly available, false = limited availability
