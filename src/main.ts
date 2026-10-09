@@ -5,16 +5,18 @@ import path from 'node:path';
 import ignore from 'ignore';
 import { features } from 'web-features';
 import { createTypeScriptContext } from './typescript.js';
-import type { TypeContext } from './typescript.js';
+import type { TypeContext, TypeScriptContext } from './typescript.js';
 import { detectors } from './detectors.js';
 import { extractScripts } from './html.js';
 
 export interface DetectOptions {
   cwd?: string;
+  typescriptContext?: TypeScriptContext;
 }
 
 export interface DetectSourceOptions {
   fileName?: string;
+  typescriptContext?: TypeScriptContext;
 }
 
 // high = widely available, low = newly available, false = limited availability
@@ -134,7 +136,13 @@ export function detectFeaturesForSource(
   options?: DetectSourceOptions,
 ): Map<string, Set<string>> {
   const fileName = options?.fileName ?? '<source>';
-  const found = detectInFile(fileName, source, null);
+  const context = options?.typescriptContext;
+  const sourceFile = hasEmbeddedScripts(fileName)
+    ? undefined
+    : context?.program.getSourceFile(fileName);
+  const types: TypeContext | null =
+    context && sourceFile ? { ...context, sourceFile } : null;
+  const found = detectInFile(fileName, source, types);
   return found.size > 0 ? new Map([[fileName, found]]) : new Map();
 }
 
@@ -144,10 +152,12 @@ export async function detectFeatures(
   const cwd = options?.cwd ?? process.cwd();
   const files = await getSourceFiles(cwd);
 
-  const baseContext = createTypeScriptContext(
-    cwd,
-    files.filter((file) => !hasEmbeddedScripts(file)),
-  );
+  const baseContext =
+    options?.typescriptContext ??
+    createTypeScriptContext(
+      cwd,
+      files.filter((file) => !hasEmbeddedScripts(file)),
+    );
 
   const results = new Map<string, Set<string>>();
   for (const file of files) {
