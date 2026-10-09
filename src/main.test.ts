@@ -243,6 +243,39 @@ describe('detectFeaturesForSource with typescriptContext', () => {
   });
 });
 
+describe('detectFeatures with typescriptContext', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'baseline-detector-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('uses the given program instead of creating one', async () => {
+    const fileName = path.join(dir, 'b.ts');
+    await writeFile(
+      fileName,
+      'export const v = Promise.withResolvers<number>();',
+    );
+    const program = ts.createProgram([fileName], {
+      lib: ['lib.esnext.d.ts'],
+      noEmit: true,
+    });
+
+    const withTypes = await detectFeatures({
+      cwd: dir,
+      typescriptContext: { ts, program, checker: program.getTypeChecker() },
+    });
+    const withoutTypes = await detectFeatures({ cwd: dir });
+
+    expect(byFile(withTypes)['b.ts']).toContain('promise-withresolvers');
+    expect(byFile(withoutTypes)['b.ts']).not.toContain('promise-withresolvers');
+  });
+});
+
 describe('detectBaselineTarget', () => {
   let dir: string;
 

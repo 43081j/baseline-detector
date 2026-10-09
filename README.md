@@ -103,7 +103,7 @@ Source files are discovered from the directory's `tsconfig.json` `rootDir` (fall
 
 | Export | Description |
 | --- | --- |
-| `detectFeatures(options?)` | Resolves to a `Map<string, Set<string>>` of feature IDs detected per file. |
+| `detectFeatures(options?)` | Resolves to a `Map<string, Set<string>>` of feature IDs detected per file. Pass `options.typescriptContext` (`{ ts, program, checker }`) to reuse an existing TypeScript program instead of creating one. |
 | `detectFeaturesForSource(source, options?)` | As `detectFeatures`, but for a single in-memory source. `options.fileName` (default `'<source>'`) keys the result and picks the language by extension. `options.typescriptContext` (`{ ts, program, checker }`) enables type information for a file in that program; without it, member usages like `arr.toSorted()` are not detected. |
 | `detectBaselineTarget(options?)` | Resolves to a `BaselineTarget`, `{ status, reason }`, where `status` is the project's overall `BaselineStatus` (`'high'`, `'low'`, or `false`) and `reason` is the feature ID that determined it (`null` when `status` is `'high'`). |
 | `detectBaselineYear(options?)` | Resolves to the newest Baseline year the project targets, or `null`. |

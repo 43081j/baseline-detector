@@ -11,6 +11,7 @@ import { extractScripts } from './html.js';
 
 export interface DetectOptions {
   cwd?: string;
+  typescriptContext?: TypeScriptContext;
 }
 
 export interface DetectSourceOptions {
@@ -151,10 +152,12 @@ export async function detectFeatures(
   const cwd = options?.cwd ?? process.cwd();
   const files = await getSourceFiles(cwd);
 
-  const baseContext = createTypeScriptContext(
-    cwd,
-    files.filter((file) => !hasEmbeddedScripts(file)),
-  );
+  const baseContext =
+    options?.typescriptContext ??
+    createTypeScriptContext(
+      cwd,
+      files.filter((file) => !hasEmbeddedScripts(file)),
+    );
 
   const results = new Map<string, Set<string>>();
   for (const file of files) {
