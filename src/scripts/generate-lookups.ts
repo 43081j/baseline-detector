@@ -1,13 +1,13 @@
 import { writeFile } from 'node:fs/promises';
 import { features } from 'web-features';
-import { createCssLookups } from '../src/detection/css.ts';
-import { CSS_RULES } from '../src/detection/css-rules.ts';
-import type { CssLookups } from '../src/detection/css.ts';
-import type { DetectorLang } from '../src/detection/detector.ts';
-import type { JsLookups } from '../src/detection/javascript.ts';
-import { JAVASCRIPT_RULES } from '../src/detection/javascript-rules.ts';
+import { createCssLookups } from '../detection/css.js';
+import { CSS_RULES } from '../detection/css-rules.js';
+import type { CssLookups } from '../detection/css.js';
+import type { DetectorLang } from '../detection/detector.js';
+import type { JsLookups } from '../detection/javascript.js';
+import { JAVASCRIPT_RULES } from '../detection/javascript-rules.js';
 
-const OUTPUT = new URL('../src/lookups.ts', import.meta.url);
+const OUTPUT = new URL('../lookups.ts', import.meta.url);
 
 // Groups in `css.types.<group>.<name>` paths where each `<name>` is a CSS
 // function, e.g. `color-mix` in `css.types.color.color-mix`.

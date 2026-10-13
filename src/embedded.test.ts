@@ -5,7 +5,13 @@ import { extractEmbedded } from './embedded.js';
 describe('extractEmbedded', () => {
   it('extracts the contents of a script block', () => {
     const scripts = extractEmbedded('<script>const a = 1;</script>');
-    expect(scripts).toEqual([{ code: 'const a = 1;', lang: Lang.JavaScript }]);
+    expect(scripts).toEqual([
+      {
+        code: 'const a = 1;',
+        lang: Lang.JavaScript,
+        range: [8, 20],
+      },
+    ]);
   });
 
   it('defaults to JavaScript when no lang attribute is present', () => {
@@ -39,14 +45,14 @@ describe('extractEmbedded', () => {
     ].join('\n');
 
     expect(extractEmbedded(source)).toEqual([
-      { code: 'const setup = 1;', lang: Lang.TypeScript },
-      { code: 'const legacy = 2;', lang: Lang.JavaScript },
+      { code: 'const setup = 1;', lang: Lang.TypeScript, range: [18, 34] },
+      { code: 'const legacy = 2;', lang: Lang.JavaScript, range: [52, 69] },
     ]);
   });
 
   it('yields empty code for an empty script block', () => {
     expect(extractEmbedded('<script></script>')).toEqual([
-      { code: '', lang: Lang.JavaScript },
+      { code: '', lang: Lang.JavaScript, range: [8, 8] },
     ]);
   });
 
@@ -61,7 +67,7 @@ describe('extractEmbedded', () => {
     ].join('\n');
 
     expect(extractEmbedded(source)).toEqual([
-      { code: 'const items = [];', lang: Lang.TypeScript },
+      { code: 'const items = [];', lang: Lang.TypeScript, range: [61, 78] },
     ]);
   });
 
@@ -72,8 +78,8 @@ describe('extractEmbedded', () => {
     ].join('\n');
 
     expect(extractEmbedded(source)).toEqual([
-      { code: 'a { color: red; }', lang: Lang.Css },
-      { code: 'b { color: blue; }', lang: Lang.Css },
+      { code: 'a { color: red; }', lang: Lang.Css, range: [7, 24] },
+      { code: 'b { color: blue; }', lang: Lang.Css, range: [51, 69] },
     ]);
   });
 
@@ -87,8 +93,8 @@ describe('extractEmbedded', () => {
     const source = '<style>a {}</style><script>const a = 1;</script>';
 
     expect(extractEmbedded(source)).toEqual([
-      { code: 'a {}', lang: Lang.Css },
-      { code: 'const a = 1;', lang: Lang.JavaScript },
+      { code: 'a {}', lang: Lang.Css, range: [7, 11] },
+      { code: 'const a = 1;', lang: Lang.JavaScript, range: [27, 39] },
     ]);
   });
 });

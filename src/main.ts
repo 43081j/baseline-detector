@@ -5,14 +5,18 @@ import ignore from 'ignore';
 import { createTypeScriptContext } from './typescript.js';
 import type { TypeContext } from './typescript.js';
 import { detectorLang, detectors } from './detectors.js';
-import { extractEmbedded } from './embedded.js';
+import { type EmbeddedSource, extractEmbedded } from './embedded.js';
 import { statuses } from './lookups.js';
 import type {
   BaselineStatus,
   BaselineTarget,
   DetectOptions,
   DetectSourceOptions,
+  Range,
+  Feature,
+  FeatureMap,
 } from './types.js';
+import type { Emitter } from './detection/detector.js';
 
 export type * from './types.js';
 
@@ -100,7 +104,7 @@ function runDetectors(
   lang: Lang,
   code: string,
   types: TypeContext | null,
-  emit: (featureId: string) => void,
+  emit: Emitter,
 ): void {
   const root = parse(lang, code).root();
   const targetLang = detectorLang(lang);
@@ -113,44 +117,70 @@ function runDetectors(
   }
 }
 
+function emitEmbedded(embedded: EmbeddedSource, emit: Emitter): Emitter {
+  return (featureId: string, range: Range): void => {
+    const [start, end] = range;
+    const [embeddedStart] = embedded.range;
+    const adjustedRange: Range = [start + embeddedStart, end + embeddedStart];
+    emit(featureId, adjustedRange);
+  };
+}
+
 function detectInFile(
   file: string,
   source: string,
   types: TypeContext | null,
-): Set<string> {
-  const found = new Set<string>();
-  const emit = (featureId: string): void => {
-    found.add(featureId);
+): Set<Feature> {
+  const found = new Map<string, Map<string, Range>>();
+  const emit: Emitter = (featureId, range) => {
+    const rangeMap = found.get(featureId) ?? new Map<string, Range>();
+    const rangeKey = `${range[0]}-${range[1]}`;
+    rangeMap.set(rangeKey, range);
+    found.set(featureId, rangeMap);
   };
 
   if (isEmbedded(file)) {
     for (const embedded of extractEmbedded(source)) {
-      runDetectors(embedded.lang, embedded.code, null, emit);
+      runDetectors(
+        embedded.lang,
+        embedded.code,
+        null,
+        emitEmbedded(embedded, emit),
+      );
     }
   } else {
     runDetectors(langForFile(file), source, types, emit);
   }
-  return found;
+  return new Set<Feature>(
+    Array.from(found, ([id, rangeMap]) => ({
+      id,
+      ranges: new Set(
+        [...rangeMap.values()].sort((a, b) => a[0] - b[0] || a[1] - b[1]),
+      ),
+    })),
+  );
 }
 
 export function detectFeaturesForSource(
   source: string,
   options?: DetectSourceOptions,
-): Map<string, Set<string>> {
+): FeatureMap {
   const fileName = options?.fileName ?? '<source>';
   const found = detectInFile(fileName, source, null);
-  return found.size > 0 ? new Map([[fileName, found]]) : new Map();
+  return found.size > 0
+    ? new Map<string, Set<Feature>>([[fileName, found]])
+    : new Map();
 }
 
 export async function detectFeatures(
   options?: DetectOptions,
-): Promise<Map<string, Set<string>>> {
+): Promise<FeatureMap> {
   const cwd = options?.cwd ?? process.cwd();
   const files = await getSourceFiles(cwd);
 
   const baseContext = createTypeScriptContext(cwd, files.filter(isScriptFile));
 
-  const results = new Map<string, Set<string>>();
+  const results = new Map<string, Set<Feature>>();
   for (const file of files) {
     // oxlint-disable-next-line no-await-in-loop
     const source = await readFile(file, 'utf8');
@@ -170,11 +200,11 @@ export async function detectFeatures(
   return results;
 }
 
-function collectFeatureIds(input: Map<string, Set<string>>): Set<string> {
+function collectFeatureIds(input: FeatureMap): Set<string> {
   const all = new Set<string>();
-  for (const ids of input.values()) {
-    for (const id of ids) {
-      all.add(id);
+  for (const features of input.values()) {
+    for (const feature of features) {
+      all.add(feature.id);
     }
   }
   return all;
@@ -185,7 +215,7 @@ function baselineStatusOf(featureId: string): BaselineStatus | null {
 }
 
 export function detectBaselineTargetForFeatures(
-  input: Map<string, Set<string>>,
+  input: FeatureMap,
 ): BaselineTarget {
   const ids = collectFeatureIds(input);
 
@@ -216,7 +246,7 @@ export async function detectBaselineTarget(
 }
 
 export function detectBaselineYearForFeatures(
-  input: Map<string, Set<string>>,
+  input: FeatureMap,
 ): number | null {
   const ids = collectFeatureIds(input);
 

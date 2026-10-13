@@ -1,6 +1,10 @@
 import { Lang, type Rule } from '@ast-grep/napi';
 import { createCssDetectors } from './detection/css.js';
-import type { Detector, DetectorLang } from './detection/detector.js';
+import {
+  rangeOf,
+  type Detector,
+  type DetectorLang,
+} from './detection/detector.js';
 import { createJsDetectors } from './detection/javascript.js';
 import { JAVASCRIPT_RULES } from './detection/javascript-rules.js';
 import { CSS_RULES } from './detection/css-rules.js';
@@ -27,7 +31,7 @@ function createDetectors(): Detector[] {
       detectors.push({
         lang,
         rule,
-        visit: (_node, emit) => emit(featureId),
+        visit: (node, emit) => emit(featureId, rangeOf(node)),
       });
     }
   }

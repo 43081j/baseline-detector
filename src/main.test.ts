@@ -14,7 +14,11 @@ import {
   detectBaselineYearForSource,
   detectFeatures,
   detectFeaturesForSource,
+  type Feature,
+  type Range,
 } from './main.js';
+
+const noRanges = new Set<Range>();
 
 // Features we don't detect, usually because they don't have a baseline date
 const KNOWN_UNDETECTED = new Set([
@@ -67,10 +71,12 @@ async function writeProject(
 
 // Reduces the file-keyed result to a basename -> sorted feature ids map so the
 // absolute temp paths don't need to appear in assertions.
-function byFile(result: Map<string, Set<string>>): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
-  for (const [file, ids] of result) {
-    out[path.basename(file)] = [...ids].sort();
+function byFile(result: Map<string, Set<Feature>>): Record<string, Feature[]> {
+  const out: Record<string, Feature[]> = {};
+  for (const [file, fileFeatures] of result) {
+    out[path.basename(file)] = [...fileFeatures].toSorted((a, b) =>
+      a.id.localeCompare(b.id),
+    );
   }
   return out;
 }
@@ -126,9 +132,9 @@ describe('detectFeatures', () => {
     const result = await detectFeatures({ cwd });
 
     const normalized = [...result]
-      .map(([file, ids]): [string, string[]] => [
+      .map(([file, fileFeatures]): [string, string[]] => [
         path.relative(cwd, file),
-        [...ids].sort(),
+        Array.from(fileFeatures, (f) => f.id).sort(),
       ])
       .sort(([a], [b]) => a.localeCompare(b));
 
@@ -153,8 +159,11 @@ describe('detectFeatures', () => {
       'b.js': 'const x = a ?? b;',
     });
     expect(byFile(await detectFeatures({ cwd: dir }))).toEqual({
-      'a.js': ['fetch'],
-      'b.js': ['let-const', 'nullish-coalescing'],
+      'a.js': [{ id: 'fetch', ranges: new Set([[0, 5]]) }],
+      'b.js': [
+        { id: 'let-const', ranges: new Set([[0, 17]]) },
+        { id: 'nullish-coalescing', ranges: new Set([[10, 16]]) },
+      ],
     });
   });
 
@@ -165,7 +174,7 @@ describe('detectFeatures', () => {
       '.gitignore': 'skip.js\n',
     });
     expect(byFile(await detectFeatures({ cwd: dir }))).toEqual({
-      'used.js': ['fetch'],
+      'used.js': [{ id: 'fetch', ranges: new Set([[0, 5]]) }],
     });
   });
 });
@@ -174,7 +183,7 @@ describe('detectFeaturesForSource', () => {
   it('detects features in an in-memory source', () => {
     const result = detectFeaturesForSource('x = a ?? b;');
     expect(byFile(result)).toEqual({
-      '<source>': ['nullish-coalescing'],
+      '<source>': [{ id: 'nullish-coalescing', ranges: new Set([[4, 10]]) }],
     });
   });
 
@@ -189,14 +198,47 @@ describe('detectFeaturesForSource', () => {
     const result = detectFeaturesForSource('const x = a as string;', {
       fileName: 'input.ts',
     });
-    expect(byFile(result)['input.ts']).toContain('let-const');
+    expect(byFile(result)['input.ts']).toEqual([
+      { id: 'let-const', ranges: new Set([[0, 22]]) },
+    ]);
   });
 
   it('detects features in embedded scripts', () => {
     const result = detectFeaturesForSource('<script>x = a ?? b;</script>', {
       fileName: 'App.vue',
     });
-    expect(byFile(result)).toEqual({ 'App.vue': ['nullish-coalescing'] });
+    expect(byFile(result)).toEqual({
+      'App.vue': [{ id: 'nullish-coalescing', ranges: new Set([[12, 18]]) }],
+    });
+  });
+
+  it('deduplicates ranges emitted by multiple rules for the same feature', () => {
+    const result = detectFeaturesForSource('a { color: #ff00ff80; }', {
+      fileName: 'a.css',
+    });
+    expect(byFile(result)['a.css']).toEqual([
+      {
+        id: 'color',
+        ranges: new Set([[4, 9]]),
+      },
+      {
+        id: 'rgb',
+        ranges: new Set([[11, 20]]),
+      },
+    ]);
+  });
+
+  it('sorts ranges by source position', () => {
+    const result = detectFeaturesForSource(
+      'async function* f() {} const g = async function* () {};',
+      { fileName: 'a.js' },
+    );
+    const file = byFile(result)['a.js']!;
+    const feature = file.find((f) => f.id === 'async-generators')!;
+    expect([...feature.ranges]).toEqual([
+      [0, 22],
+      [33, 54],
+    ]);
   });
 
   it('returns an empty map when nothing is detected', () => {
@@ -310,9 +352,15 @@ describe('detectBaselineTargetForFeatures', () => {
   });
 
   it('is high with no reason when every feature is widely available', () => {
-    const input = new Map([
-      ['a.js', new Set(['fetch'])],
-      ['b.js', new Set(['nullish-coalescing', 'structured-clone'])],
+    const input = new Map<string, Set<Feature>>([
+      ['a.js', new Set<Feature>([{ id: 'fetch', ranges: noRanges }])],
+      [
+        'b.js',
+        new Set<Feature>([
+          { id: 'nullish-coalescing', ranges: noRanges },
+          { id: 'structured-clone', ranges: noRanges },
+        ]),
+      ],
     ]);
     expect(detectBaselineTargetForFeatures(input)).toEqual({
       status: 'high',
@@ -321,7 +369,15 @@ describe('detectBaselineTargetForFeatures', () => {
   });
 
   it('ignores unknown feature ids', () => {
-    const input = new Map([['a.js', new Set(['fetch', 'not-a-real-feature'])]]);
+    const input = new Map<string, Set<Feature>>([
+      [
+        'a.js',
+        new Set<Feature>([
+          { id: 'fetch', ranges: noRanges },
+          { id: 'not-a-real-feature', ranges: noRanges },
+        ]),
+      ],
+    ]);
     expect(detectBaselineTargetForFeatures(input)).toEqual({
       status: 'high',
       reason: null,
@@ -331,7 +387,15 @@ describe('detectBaselineTargetForFeatures', () => {
   it.skipIf(!lowFeature)(
     'is low with the responsible feature when a newly available feature is present',
     () => {
-      const input = new Map([['a.js', new Set(['fetch', lowFeature!.id])]]);
+      const input = new Map<string, Set<Feature>>([
+        [
+          'a.js',
+          new Set<Feature>([
+            { id: 'fetch', ranges: noRanges },
+            { id: lowFeature!.id, ranges: noRanges },
+          ]),
+        ],
+      ]);
       expect(detectBaselineTargetForFeatures(input)).toEqual({
         status: 'low',
         reason: lowFeature!.id,
@@ -342,7 +406,15 @@ describe('detectBaselineTargetForFeatures', () => {
   it.skipIf(!limitedFeature)(
     'is false with the responsible feature when a limited availability feature is present',
     () => {
-      const input = new Map([['a.js', new Set(['fetch', limitedFeature!.id])]]);
+      const input = new Map<string, Set<Feature>>([
+        [
+          'a.js',
+          new Set<Feature>([
+            { id: 'fetch', ranges: noRanges },
+            { id: limitedFeature!.id, ranges: noRanges },
+          ]),
+        ],
+      ]);
       expect(detectBaselineTargetForFeatures(input)).toEqual({
         status: false,
         reason: limitedFeature!.id,
@@ -353,9 +425,12 @@ describe('detectBaselineTargetForFeatures', () => {
   it.skipIf(!lowFeature || !limitedFeature)(
     'prefers limited availability over newly available',
     () => {
-      const input = new Map([
-        ['a.js', new Set([lowFeature!.id])],
-        ['b.js', new Set([limitedFeature!.id])],
+      const input = new Map<string, Set<Feature>>([
+        ['a.js', new Set<Feature>([{ id: lowFeature!.id, ranges: noRanges }])],
+        [
+          'b.js',
+          new Set<Feature>([{ id: limitedFeature!.id, ranges: noRanges }]),
+        ],
       ]);
       expect(detectBaselineTargetForFeatures(input)).toEqual({
         status: false,
@@ -371,30 +446,58 @@ describe('detectBaselineYearForFeatures', () => {
   });
 
   it('takes the maximum year across files', () => {
-    const input = new Map([
-      ['old.js', new Set(['nullish-coalescing'])],
-      ['new.js', new Set(['structured-clone'])],
+    const input = new Map<string, Set<Feature>>([
+      [
+        'old.js',
+        new Set<Feature>([{ id: 'nullish-coalescing', ranges: noRanges }]),
+      ],
+      [
+        'new.js',
+        new Set<Feature>([{ id: 'structured-clone', ranges: noRanges }]),
+      ],
     ]);
     expect(detectBaselineYearForFeatures(input)).toBe(2022);
   });
 
   it('deduplicates features seen in multiple files', () => {
-    const input = new Map([
-      ['a.js', new Set(['nullish-coalescing'])],
-      ['b.js', new Set(['nullish-coalescing'])],
+    const input = new Map<string, Set<Feature>>([
+      [
+        'a.js',
+        new Set<Feature>([{ id: 'nullish-coalescing', ranges: noRanges }]),
+      ],
+      [
+        'b.js',
+        new Set<Feature>([{ id: 'nullish-coalescing', ranges: noRanges }]),
+      ],
     ]);
     expect(detectBaselineYearForFeatures(input)).toBe(2020);
   });
 
   it('returns null when a feature id is unknown', () => {
-    const input = new Map([['a.js', new Set(['fetch', 'not-a-real-feature'])]]);
+    const input = new Map<string, Set<Feature>>([
+      [
+        'a.js',
+        new Set<Feature>([
+          { id: 'fetch', ranges: noRanges },
+          { id: 'not-a-real-feature', ranges: noRanges },
+        ]),
+      ],
+    ]);
     expect(detectBaselineYearForFeatures(input)).toBeNull();
   });
 
   it.skipIf(!lowFeature)(
     'returns the year of a newly available feature',
     () => {
-      const input = new Map([['a.js', new Set(['fetch', lowFeature!.id])]]);
+      const input = new Map<string, Set<Feature>>([
+        [
+          'a.js',
+          new Set<Feature>([
+            { id: 'fetch', ranges: noRanges },
+            { id: lowFeature!.id, ranges: noRanges },
+          ]),
+        ],
+      ]);
       expect(detectBaselineYearForFeatures(input)).toBe(lowFeature!.year);
     },
   );
@@ -402,7 +505,15 @@ describe('detectBaselineYearForFeatures', () => {
   it.skipIf(!limitedFeature)(
     'returns null when a limited availability feature is present',
     () => {
-      const input = new Map([['a.js', new Set(['fetch', limitedFeature!.id])]]);
+      const input = new Map<string, Set<Feature>>([
+        [
+          'a.js',
+          new Set<Feature>([
+            { id: 'fetch', ranges: noRanges },
+            { id: limitedFeature!.id, ranges: noRanges },
+          ]),
+        ],
+      ]);
       expect(detectBaselineYearForFeatures(input)).toBeNull();
     },
   );

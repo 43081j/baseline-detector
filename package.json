@@ -17,7 +17,8 @@
     "bin",
     "lib",
     "!lib/**/*.test.js",
-    "!lib/**/*.test.d.ts"
+    "!lib/**/*.test.d.ts",
+    "!lib/scripts"
   ],
   "scripts": {
     "build:clean": "node -e \"require('fs').rmSync('./lib', { recursive: true, force: true })\"",
@@ -27,7 +28,7 @@
     "lint": "npm run lint:js && npm run lint:format",
     "format": "oxfmt --write src",
     "test": "vitest run",
-    "generate-lookups": "node scripts/generate-lookups.ts && oxfmt --write src/lookups.ts"
+    "generate-lookups": "node lib/scripts/generate-lookups.js && oxfmt --write src/lookups.ts"
   },
   "keywords": [
     "baseline",

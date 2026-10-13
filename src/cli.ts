@@ -35,10 +35,10 @@ async function runFeatures(options: DetectOptions): Promise<void> {
     console.log('No features detected.');
     return;
   }
-  for (const [file, ids] of byFile) {
+  for (const [file, features] of byFile) {
     console.log(file);
-    for (const id of ids) {
-      console.log(`  ${id}`);
+    for (const feature of features) {
+      console.log(`  ${feature.id}`);
     }
   }
 }

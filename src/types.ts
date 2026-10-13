@@ -14,3 +14,12 @@ export interface BaselineTarget {
   // The feature that determined the status
   reason: string | null;
 }
+
+export type Range = [number, number];
+
+export interface Feature {
+  id: string;
+  ranges: Set<Range>;
+}
+
+export type FeatureMap = Map<string, Set<Feature>>;

@@ -1,5 +1,5 @@
 import type { Rule, SgNode } from '@ast-grep/napi';
-import type { Detector } from './detector.js';
+import { rangeOf, type Detector } from './detector.js';
 
 const AT_RULE: Rule = {
   any: [
@@ -91,7 +91,7 @@ function lookupDetector(rule: Rule, lookup: Map<string, string>): Detector {
     rule,
     visit: (node, emit) => {
       const featureId = lookup.get(lowerText(node));
-      if (featureId) emit(featureId);
+      if (featureId) emit(featureId, rangeOf(node));
     },
   };
 }
@@ -122,10 +122,10 @@ export function createCssDetectors(lookups: CssLookups): Detector[] {
           const text = lowerText(value);
           const featureId = keywords?.get(text);
           if (featureId) {
-            emit(featureId);
+            emit(featureId, rangeOf(value));
           } else if (value.kind() === 'plain_value') {
             const globalFeatureId = lookups.globalKeywords.get(text);
-            if (globalFeatureId) emit(globalFeatureId);
+            if (globalFeatureId) emit(globalFeatureId, rangeOf(value));
           }
         }
       },
@@ -157,7 +157,7 @@ export function createCssDetectors(lookups: CssLookups): Detector[] {
         if (!featureId && node.kind() === 'feature_name') {
           featureId = descriptors.get(text.replace(/^(min|max)-/, ''));
         }
-        if (featureId) emit(featureId);
+        if (featureId) emit(featureId, rangeOf(node));
       },
     },
     lookupDetector(
@@ -181,7 +181,7 @@ export function createCssDetectors(lookups: CssLookups): Detector[] {
         if (!name) return;
 
         const featureId = lookups.atRules.get(name);
-        if (featureId) emit(featureId);
+        if (featureId) emit(featureId, rangeOf(node));
       },
     },
     lookupDetector({ kind: 'function_name' }, lookups.functions),

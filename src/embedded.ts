@@ -1,7 +1,10 @@
 import { parse, Lang } from '@ast-grep/napi';
 import type { SgNode } from '@ast-grep/napi';
+import { rangeOf } from './detection/detector.js';
+import type { Range } from './types.js';
 
 export interface EmbeddedSource {
+  range: Range;
   code: string;
   lang: Lang;
 }
@@ -44,10 +47,11 @@ export function extractEmbedded(source: string): EmbeddedSource[] {
   for (const element of elements) {
     const rawText = element.find({ rule: { kind: 'raw_text' } });
     if (!rawText) continue;
+    const range = rangeOf(rawText);
     if (element.kind() === 'script_element') {
-      sources.push({ code: rawText.text(), lang: scriptLang(element) });
+      sources.push({ code: rawText.text(), lang: scriptLang(element), range });
     } else if (isCssStyle(element)) {
-      sources.push({ code: rawText.text(), lang: Lang.Css });
+      sources.push({ code: rawText.text(), lang: Lang.Css, range });
     }
   }
   return sources;
