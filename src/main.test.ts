@@ -16,6 +16,8 @@ import {
   detectFeaturesForSource,
   type Feature,
   type Range,
+  baselineStatusOf,
+  yearOf,
 } from './main.js';
 
 const noRanges = new Set<Range>();
@@ -584,5 +586,44 @@ describe('detectBaselineYearForSource', () => {
         fileName: 'App.vue',
       }),
     ).toBe(2020);
+  });
+});
+
+describe('baselineStatusOf', () => {
+  it('returns high for a widely available feature', () => {
+    expect(baselineStatusOf('fetch')).toBe('high');
+  });
+
+  it.skipIf(!lowFeature)('returns low for a newly available feature', () => {
+    expect(baselineStatusOf(lowFeature!.id)).toBe('low');
+  });
+
+  it.skipIf(!limitedFeature)(
+    'returns false for a limited availability feature',
+    () => {
+      expect(baselineStatusOf(limitedFeature!.id)).toBe(false);
+    },
+  );
+
+  it('returns null for an unknown feature id', () => {
+    expect(baselineStatusOf('not-a-real-feature')).toBeNull();
+  });
+});
+
+describe('yearOf', () => {
+  it('returns the baseline year of a feature', () => {
+    expect(yearOf('nullish-coalescing')).toBe(2020);
+    expect(yearOf('structured-clone')).toBe(2022);
+  });
+
+  it.skipIf(!limitedFeature)(
+    'returns null for a limited availability feature',
+    () => {
+      expect(yearOf(limitedFeature!.id)).toBeNull();
+    },
+  );
+
+  it('returns null for an unknown feature id', () => {
+    expect(yearOf('not-a-real-feature')).toBeNull();
   });
 });

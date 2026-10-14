@@ -210,8 +210,12 @@ function collectFeatureIds(input: FeatureMap): Set<string> {
   return all;
 }
 
-function baselineStatusOf(featureId: string): BaselineStatus | null {
+export function baselineStatusOf(featureId: string): BaselineStatus | null {
   return statuses.get(featureId)?.[0] ?? null;
+}
+
+export function yearOf(featureId: string): number | null {
+  return statuses.get(featureId)?.[1] ?? null;
 }
 
 export function detectBaselineTargetForFeatures(
@@ -244,7 +248,6 @@ export async function detectBaselineTarget(
   const target = detectBaselineTargetForFeatures(result);
   return target;
 }
-
 export function detectBaselineYearForFeatures(
   input: FeatureMap,
 ): number | null {
@@ -252,7 +255,7 @@ export function detectBaselineYearForFeatures(
 
   let year: number | null = null;
   for (const id of ids) {
-    const featureYear = statuses.get(id)?.[1];
+    const featureYear = yearOf(id);
     if (!featureYear) return null;
     if (year === null || featureYear > year) {
       year = featureYear;

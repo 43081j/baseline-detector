@@ -7,7 +7,7 @@ import type { DetectorLang } from '../detection/detector.js';
 import type { JsLookups } from '../detection/javascript.js';
 import { JAVASCRIPT_RULES } from '../detection/javascript-rules.js';
 
-const OUTPUT = new URL('../lookups.ts', import.meta.url);
+const OUTPUT = new URL('../../src/lookups.ts', import.meta.url);
 
 // Groups in `css.types.<group>.<name>` paths where each `<name>` is a CSS
 // function, e.g. `color-mix` in `css.types.color.color-mix`.
