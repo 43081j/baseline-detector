@@ -153,6 +153,36 @@ const typedCases: Array<{ name: string; code: string; expected: string[] }> = [
     code: 'const fetch = 1; fetch;',
     expected: ['let-const'],
   },
+  {
+    name: 'a static API member',
+    code: 'AbortSignal.any([]);',
+    expected: ['aborting', 'abortsignal-any'],
+  },
+  {
+    name: 'an instance API member',
+    code: 'declare const c: Credential; c.id;',
+    expected: ['credential-management', 'let-const'],
+  },
+  {
+    name: 'a static API member accessed on an instance is ignored',
+    code: 'declare const s: AbortSignal; s.any;',
+    expected: ['let-const'],
+  },
+  {
+    name: 'a static builtin member',
+    code: 'Array.from([]);',
+    expected: ['array', 'array-from'],
+  },
+  {
+    name: 'a static builtin member accessed on an instance is ignored',
+    code: 'const a: number[] = []; a.from;',
+    expected: ['let-const'],
+  },
+  {
+    name: 'an instance builtin member accessed statically is ignored',
+    code: 'Array.flat;',
+    expected: ['array'],
+  },
 ];
 
 const guardCases: Array<{ name: string; code: string; expected: string[] }> = [

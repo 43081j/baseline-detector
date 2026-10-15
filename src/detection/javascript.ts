@@ -5,11 +5,17 @@ import { isGuarded } from './guards/javascript.js';
 export interface JsLookups {
   // global name -> feature id
   globals: Map<string, string>;
-  // type name -> member name -> feature id
+  // type name -> instance member name -> feature id
   members: Map<string, Map<string, string>>;
+  // type name -> static member name -> feature id
+  statics: Map<string, Map<string, string>>;
 }
 
-export function createJsDetectors({ globals, members }: JsLookups): Detector[] {
+export function createJsDetectors({
+  globals,
+  members,
+  statics,
+}: JsLookups): Detector[] {
   return [
     // find all identifiers that are globals matching features
     {
@@ -42,10 +48,18 @@ export function createJsDetectors({ globals, members }: JsLookups): Detector[] {
         ).parent;
         if (!parent || !types.ts.isPropertyAccessExpression(parent)) return;
 
-        const type = types.checker.getTypeAtLocation(parent.expression);
+        const { checker } = types;
+        const type = checker.getTypeAtLocation(parent.expression);
+        // We have to check if the type is from the prototype or not since
+        // the lookup distinguishes them
+        const prototype = type.getConstructSignatures().length
+          ? type.getProperty('prototype')
+          : undefined;
+        const lookup = prototype ? statics : members;
+        const receiver = prototype ? checker.getTypeOfSymbol(prototype) : type;
         const member = property.text();
-        for (const name of typeNames(types.checker, type)) {
-          const featureId = members.get(name)?.get(member);
+        for (const name of typeNames(checker, receiver)) {
+          const featureId = lookup.get(name)?.get(member);
           if (featureId) {
             emit(featureId, rangeOf(property));
             return;

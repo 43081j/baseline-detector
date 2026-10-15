@@ -46,21 +46,76 @@ const upsertMap = <TKey, TValue>(
   return existing;
 };
 
+const STATIC_SUFFIX = '_static';
+const STATIC_MEMBER = 1;
+const INSTANCE_MEMBER = 2;
+const BOTH_MEMBER = 3;
+
+function isStaticOrInstanceMember(type: string, member: string): number {
+  // `TypedArray` is the abstract `%TypedArray%`, which isn't a global
+  const value: unknown =
+    type === 'TypedArray'
+      ? Object.getPrototypeOf(Int8Array)
+      : Reflect.get(globalThis, type);
+  if (typeof value === 'object' && value !== null) {
+    return INSTANCE_MEMBER;
+  }
+  if (typeof value !== 'function') {
+    return BOTH_MEMBER;
+  }
+
+  const prototype: unknown = value.prototype;
+  let kind = Object.hasOwn(value, member) ? STATIC_MEMBER : 0;
+  if (
+    typeof prototype === 'object' &&
+    prototype !== null &&
+    member in prototype
+  ) {
+    kind |= INSTANCE_MEMBER;
+  }
+  return kind || BOTH_MEMBER;
+}
+
+function addJsMember(
+  map: Map<string, Map<string, string>>,
+  type: string,
+  member: string,
+  featureId: string,
+): void {
+  upsertMap(upsertMap(map, type, new Map<string, string>()), member, featureId);
+}
+
 function addJsCompat(
   lookups: JsLookups,
   leaf: string[],
   featureId: string,
+  builtin: boolean,
 ): void {
   const [type, member, extra] = leaf;
   if (type && !member) {
     upsertMap(lookups.globals, type, featureId);
-  } else if (type && member && !extra) {
-    const memberMap = upsertMap(
-      lookups.members,
-      type,
-      new Map<string, string>(),
-    );
-    upsertMap(memberMap, member, featureId);
+    return;
+  }
+  if (!type || !member || extra) return;
+
+  // API statics are suffixed, e.g. `AbortSignal.any_static`
+  if (member.endsWith(STATIC_SUFFIX)) {
+    const name = member.slice(0, -STATIC_SUFFIX.length);
+    addJsMember(lookups.statics, type, name, featureId);
+    return;
+  }
+  if (!builtin) {
+    addJsMember(lookups.members, type, member, featureId);
+    return;
+  }
+
+  const memberType = isStaticOrInstanceMember(type, member);
+
+  if (memberType & STATIC_MEMBER) {
+    addJsMember(lookups.statics, type, member, featureId);
+  }
+  if (memberType & INSTANCE_MEMBER) {
+    addJsMember(lookups.members, type, member, featureId);
   }
 }
 
@@ -137,7 +192,7 @@ interface Lookups {
 
 function buildLookups(): Lookups {
   const lookups: Lookups = {
-    js: { globals: new Map(), members: new Map() },
+    js: { globals: new Map(), members: new Map(), statics: new Map() },
     css: createCssLookups(),
     ruleFeatures: [],
     statuses: new Map(),
@@ -161,10 +216,10 @@ function buildLookups(): Lookups {
 
       if (segments[0] === 'api') {
         // api.* paths, e.g. `api.fetch`.
-        addJsCompat(lookups.js, segments.slice(1), featureId);
+        addJsCompat(lookups.js, segments.slice(1), featureId, false);
       } else if (segments[0] === 'javascript' && segments[1] === 'builtins') {
         // javascript.builtins.* paths, e.g. `javascript.builtins.Promise`.
-        addJsCompat(lookups.js, segments.slice(2), featureId);
+        addJsCompat(lookups.js, segments.slice(2), featureId, true);
       } else if (segments[0] === 'javascript') {
         if (JAVASCRIPT_RULES.has(rest)) {
           lookups.ruleFeatures.push(['js', rest, featureId]);
