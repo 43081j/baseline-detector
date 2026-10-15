@@ -1,5 +1,6 @@
 import { isGlobalBinding, nodeAt, typeNames } from '../typescript.js';
 import { rangeOf, type Detector } from './detector.js';
+import { isGuarded } from './guards/javascript.js';
 
 export interface JsLookups {
   // global name -> feature id
@@ -15,8 +16,13 @@ export function createJsDetectors({ globals, members }: JsLookups): Detector[] {
       lang: 'js',
       rule: { kind: 'identifier' },
       visit: (node, emit, types) => {
-        const featureId = globals.get(node.text());
-        if (featureId && (!types || isGlobalBinding(types, node))) {
+        const nodeText = node.text();
+        const featureId = globals.get(nodeText);
+        if (
+          featureId &&
+          (!types || isGlobalBinding(types, node)) &&
+          !isGuarded(node, nodeText)
+        ) {
           emit(featureId, rangeOf(node));
         }
       },

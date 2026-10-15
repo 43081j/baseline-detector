@@ -155,6 +155,124 @@ const typedCases: Array<{ name: string; code: string; expected: string[] }> = [
   },
 ];
 
+const guardCases: Array<{ name: string; code: string; expected: string[] }> = [
+  {
+    name: 'a member access guard',
+    code: 'if (globalThis.fetch) { fetch("/x"); }',
+    expected: ['globalthis'],
+  },
+  {
+    name: 'an optional member access guard',
+    code: 'if (globalThis?.fetch) { fetch("/x"); }',
+    expected: ['globalthis', 'object-object'],
+  },
+  {
+    name: 'an `in` guard',
+    code: 'if ("fetch" in globalThis) { fetch("/x"); }',
+    expected: ['globalthis'],
+  },
+  {
+    name: 'an `in` guard with single quotes',
+    code: "if ('fetch' in globalThis) { fetch('/x'); }",
+    expected: ['globalthis'],
+  },
+  {
+    name: 'an Object.hasOwn guard',
+    code: 'if (Object.hasOwn(globalThis, "fetch")) { fetch("/x"); }',
+    expected: ['globalthis', 'object-object'],
+  },
+  {
+    name: 'a hasOwnProperty.call guard',
+    code: 'if (Object.prototype.hasOwnProperty.call(globalThis, "fetch")) { fetch("/x"); }',
+    expected: ['globalthis', 'object-object'],
+  },
+  {
+    name: 'a hasOwnProperty.apply guard',
+    code: 'if (Object.prototype.hasOwnProperty.apply(globalThis, ["fetch"])) { fetch("/x"); }',
+    expected: ['globalthis', 'object-object'],
+  },
+  {
+    name: 'a window guard',
+    code: 'if (window.fetch) { fetch("/x"); }',
+    expected: [],
+  },
+  {
+    name: 'a self guard',
+    code: 'if (self.fetch) { fetch("/x"); }',
+    expected: [],
+  },
+  {
+    name: 'a guard combined with &&',
+    code: 'if (a && globalThis.fetch) { fetch("/x"); }',
+    expected: ['globalthis'],
+  },
+  {
+    name: 'a guard on the left of &&',
+    code: 'globalThis.fetch && fetch("/x");',
+    expected: ['globalthis'],
+  },
+  {
+    name: 'a guard on the left of && in a condition',
+    code: 'if ("fetch" in globalThis && fetch) {}',
+    expected: ['globalthis'],
+  },
+  {
+    name: 'a nested guarded usage',
+    code: 'if (globalThis.fetch) { if (a) { fetch("/x"); } }',
+    expected: ['globalthis'],
+  },
+  {
+    name: 'a negated guard',
+    code: 'if (!globalThis.fetch) { fetch("/x"); }',
+    expected: ['fetch', 'globalthis'],
+  },
+  {
+    name: 'a guard combined with ||',
+    code: 'if (a || globalThis.fetch) { fetch("/x"); }',
+    expected: ['fetch', 'globalthis'],
+  },
+  {
+    name: 'a guard on the right of &&',
+    code: 'fetch && globalThis.fetch;',
+    expected: ['fetch', 'globalthis'],
+  },
+  {
+    name: 'a usage in the else branch',
+    code: 'if (globalThis.fetch) {} else { fetch("/x"); }',
+    expected: ['fetch', 'globalthis'],
+  },
+  {
+    name: 'a usage after the guarded block',
+    code: 'if (globalThis.fetch) {} fetch("/x");',
+    expected: ['fetch', 'globalthis'],
+  },
+  {
+    name: 'a guard on a non-global object',
+    code: 'if (a.fetch) { fetch("/x"); }',
+    expected: ['fetch'],
+  },
+  {
+    name: 'a guard for a different name',
+    code: 'if ("other" in globalThis) { fetch("/x"); }',
+    expected: ['fetch', 'globalthis'],
+  },
+  {
+    name: 'a comparison instead of `in`',
+    code: 'if ("fetch" === globalThis) { fetch("/x"); }',
+    expected: ['fetch', 'globalthis'],
+  },
+  {
+    name: 'an unquoted `in` operand',
+    code: 'if (fetch in globalThis) { fetch("/x"); }',
+    expected: ['fetch', 'globalthis'],
+  },
+  {
+    name: 'a computed Object.hasOwn name',
+    code: 'if (Object.hasOwn(globalThis, f("fetch"))) { fetch("/x"); }',
+    expected: ['fetch', 'globalthis', 'object-object'],
+  },
+];
+
 const cssCases: Array<{ name: string; code: string; expected: string[] }> = [
   {
     name: 'a property',
@@ -295,6 +413,10 @@ describe('detectors', () => {
   it.each(typedCases)('detects $name with types', ({ code, expected }) => {
     const types = makeTypeContext(code);
     expect(detect(code, Lang.TypeScript, types)).toEqual(expected);
+  });
+
+  it.each(guardCases)('handles $name', ({ code, expected }) => {
+    expect(detect(code, Lang.JavaScript, null)).toEqual(expected);
   });
 
   it.each(cssCases)('detects CSS $name', ({ code, expected }) => {
