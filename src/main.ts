@@ -166,7 +166,13 @@ export function detectFeaturesForSource(
   options?: DetectSourceOptions,
 ): FeatureMap {
   const fileName = options?.fileName ?? '<source>';
-  const found = detectInFile(fileName, source, null);
+  const context = options?.typescriptContext;
+  const sourceFile = isScriptFile(fileName)
+    ? context?.program.getSourceFile(fileName)
+    : undefined;
+  const types: TypeContext | null =
+    context && sourceFile ? { ...context, sourceFile } : null;
+  const found = detectInFile(fileName, source, types);
   return found.size > 0
     ? new Map<string, Set<Feature>>([[fileName, found]])
     : new Map();
@@ -178,7 +184,9 @@ export async function detectFeatures(
   const cwd = options?.cwd ?? process.cwd();
   const files = await getSourceFiles(cwd);
 
-  const baseContext = createTypeScriptContext(cwd, files.filter(isScriptFile));
+  const baseContext =
+    options?.typescriptContext ??
+    createTypeScriptContext(cwd, files.filter(isScriptFile));
 
   const results = new Map<string, Set<Feature>>();
   for (const file of files) {

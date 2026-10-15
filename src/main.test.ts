@@ -1,5 +1,6 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import ts from 'typescript';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -81,6 +82,10 @@ function byFile(result: Map<string, Set<Feature>>): Record<string, Feature[]> {
     );
   }
   return out;
+}
+
+function featureIds(result: Map<string, Set<Feature>>, file: string): string[] {
+  return (byFile(result)[file] ?? []).map((feature) => feature.id);
 }
 
 function findGlobalFeature(
@@ -246,6 +251,80 @@ describe('detectFeaturesForSource', () => {
   it('returns an empty map when nothing is detected', () => {
     const result = detectFeaturesForSource('x = 1;');
     expect(result.size).toBe(0);
+  });
+});
+
+describe('detectFeaturesForSource with typescriptContext', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'baseline-detector-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('detects member features using the given program', async () => {
+    const source = 'export const v = Promise.withResolvers<number>();';
+    const fileName = path.join(dir, 'b.ts');
+    await writeFile(fileName, source);
+    const program = ts.createProgram([fileName], {
+      lib: ['lib.esnext.d.ts'],
+      noEmit: true,
+    });
+
+    const typescriptContext = {
+      ts,
+      program,
+      checker: program.getTypeChecker(),
+    };
+
+    const withTypes = detectFeaturesForSource(source, {
+      fileName,
+      typescriptContext,
+    });
+    const withoutTypes = detectFeaturesForSource(source, { fileName });
+
+    expect(featureIds(withTypes, 'b.ts')).toContain('promise-withresolvers');
+    expect(featureIds(withoutTypes, 'b.ts')).not.toContain(
+      'promise-withresolvers',
+    );
+  });
+});
+
+describe('detectFeatures with typescriptContext', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'baseline-detector-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('uses the given program instead of creating one', async () => {
+    const fileName = path.join(dir, 'b.ts');
+    await writeFile(
+      fileName,
+      'export const v = Promise.withResolvers<number>();',
+    );
+    const program = ts.createProgram([fileName], {
+      lib: ['lib.esnext.d.ts'],
+      noEmit: true,
+    });
+
+    const withTypes = await detectFeatures({
+      cwd: dir,
+      typescriptContext: { ts, program, checker: program.getTypeChecker() },
+    });
+    const withoutTypes = await detectFeatures({ cwd: dir });
+
+    expect(featureIds(withTypes, 'b.ts')).toContain('promise-withresolvers');
+    expect(featureIds(withoutTypes, 'b.ts')).not.toContain(
+      'promise-withresolvers',
+    );
   });
 });
 
