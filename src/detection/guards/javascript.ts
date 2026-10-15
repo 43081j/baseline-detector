@@ -10,6 +10,8 @@ const guardRule: Rule = {
     { pattern: 'Object.hasOwn($TARGET, $NAME)' },
     { pattern: 'Object.prototype.hasOwnProperty.apply($TARGET, [$NAME])' },
     { pattern: 'Object.prototype.hasOwnProperty.call($TARGET, $NAME)' },
+    { pattern: 'typeof $TARGET.$NAME === $TYPEOF_EQ' },
+    { pattern: 'typeof $TARGET.$NAME !== $TYPEOF_NE' },
   ],
 };
 
@@ -25,6 +27,14 @@ const isGuardRule = (name: string): NapiConfig => ({
           has: { kind: 'string_fragment', regex: `^${name}$` },
         },
       ],
+    },
+    TYPEOF_EQ: {
+      kind: 'string',
+      has: { kind: 'string_fragment', regex: '^function$' },
+    },
+    TYPEOF_NE: {
+      kind: 'string',
+      has: { kind: 'string_fragment', regex: '^undefined$' },
     },
   },
 });

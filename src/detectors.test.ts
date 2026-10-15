@@ -222,6 +222,21 @@ const guardCases: Array<{ name: string; code: string; expected: string[] }> = [
     expected: ['globalthis', 'object-object'],
   },
   {
+    name: 'a typeof function guard',
+    code: 'if (typeof globalThis.fetch === "function") { fetch("/x"); }',
+    expected: ['globalthis'],
+  },
+  {
+    name: 'a typeof function guard with single quotes',
+    code: "if (typeof globalThis.fetch === 'function') { fetch('/x'); }",
+    expected: ['globalthis'],
+  },
+  {
+    name: 'a typeof not undefined guard',
+    code: 'if (typeof globalThis.fetch !== "undefined") { fetch("/x"); }',
+    expected: ['globalthis'],
+  },
+  {
     name: 'a window guard',
     code: 'if (window.fetch) { fetch("/x"); }',
     expected: [],
@@ -254,6 +269,16 @@ const guardCases: Array<{ name: string; code: string; expected: string[] }> = [
   {
     name: 'a negated guard',
     code: 'if (!globalThis.fetch) { fetch("/x"); }',
+    expected: ['fetch', 'globalthis'],
+  },
+  {
+    name: 'a typeof undefined check',
+    code: 'if (typeof globalThis.fetch === "undefined") { fetch("/x"); }',
+    expected: ['fetch', 'globalthis'],
+  },
+  {
+    name: 'a negated typeof guard',
+    code: 'if (!(typeof globalThis.fetch === "function")) { fetch("/x"); }',
     expected: ['fetch', 'globalthis'],
   },
   {
