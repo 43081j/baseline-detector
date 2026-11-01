@@ -61,8 +61,23 @@ import {
 } from 'baseline-detector';
 
 const features = await detectFeatures();
-const target = await detectBaselineTargetForFeatures(features);
-const year = await detectBaselineYearForFeatures(features);
+const target = detectBaselineTargetForFeatures(features);
+const year = detectBaselineYearForFeatures(features);
+```
+
+To analyse a single in-memory source instead of a project, use the `*ForSource` variants:
+
+```ts
+import {
+  detectFeaturesForSource,
+  detectBaselineTargetForSource,
+  detectBaselineYearForSource,
+} from 'baseline-detector';
+
+const source = 'const x = a ?? b;';
+const features = detectFeaturesForSource(source, { fileName: 'input.js' });
+const target = detectBaselineTargetForSource(source);
+const year = detectBaselineYearForSource(source);
 ```
 
 By default the project in the current working directory is analysed. Pass a `cwd` to point elsewhere:
@@ -78,10 +93,13 @@ Source files are discovered from the directory's `tsconfig.json` `rootDir` (fall
 | Export | Description |
 | --- | --- |
 | `detectFeatures(options?)` | Resolves to a `Map<string, Set<string>>` of feature IDs detected per file. |
+| `detectFeaturesForSource(source, options?)` | As `detectFeatures`, but for a single in-memory source. `options.fileName` (default `'<source>'`) keys the result and picks the language by extension. Runs without type information, so member usages like `arr.toSorted()` are not detected. |
 | `detectBaselineTarget(options?)` | Resolves to a `BaselineTarget`, `{ status, reason }`, where `status` is the project's overall `BaselineStatus` (`'high'`, `'low'`, or `false`) and `reason` is the feature ID that determined it (`null` when `status` is `'high'`). |
 | `detectBaselineYear(options?)` | Resolves to the newest Baseline year the project targets, or `null`. |
 | `detectBaselineTargetForFeatures(features)` | As `detectBaselineTarget`, but computed from an already detected `Map<string, Set<string>>` of features. |
 | `detectBaselineYearForFeatures(features)` | As `detectBaselineYear`, but computed from an already detected `Map<string, Set<string>>` of features. |
+| `detectBaselineTargetForSource(source, options?)` | As `detectBaselineTarget`, but computed from a single in-memory source. Takes the same options as `detectFeaturesForSource`. |
+| `detectBaselineYearForSource(source, options?)` | As `detectBaselineYear`, but computed from a single in-memory source. Takes the same options as `detectFeaturesForSource`. |
 
 ## License
 

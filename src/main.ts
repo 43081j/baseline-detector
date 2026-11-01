@@ -13,6 +13,10 @@ export interface DetectOptions {
   cwd?: string;
 }
 
+export interface DetectSourceOptions {
+  fileName?: string;
+}
+
 // high = widely available, low = newly available, false = limited availability
 export type BaselineStatus = 'high' | 'low' | false;
 
@@ -105,6 +109,35 @@ function runDetectors(
   }
 }
 
+function detectInFile(
+  file: string,
+  source: string,
+  types: TypeContext | null,
+): Set<string> {
+  const found = new Set<string>();
+  const emit = (featureId: string): void => {
+    found.add(featureId);
+  };
+
+  if (hasEmbeddedScripts(file)) {
+    for (const script of extractScripts(source)) {
+      runDetectors(parse(script.lang, script.code).root(), null, emit);
+    }
+  } else {
+    runDetectors(parse(langForFile(file), source).root(), types, emit);
+  }
+  return found;
+}
+
+export function detectFeaturesForSource(
+  source: string,
+  options?: DetectSourceOptions,
+): Map<string, Set<string>> {
+  const fileName = options?.fileName ?? '<source>';
+  const found = detectInFile(fileName, source, null);
+  return found.size > 0 ? new Map([[fileName, found]]) : new Map();
+}
+
 export async function detectFeatures(
   options?: DetectOptions,
 ): Promise<Map<string, Set<string>>> {
@@ -121,21 +154,12 @@ export async function detectFeatures(
     // oxlint-disable-next-line no-await-in-loop
     const source = await readFile(file, 'utf8');
 
-    const found = new Set<string>();
-    const emit = (featureId: string): void => {
-      found.add(featureId);
-    };
-
-    if (hasEmbeddedScripts(file)) {
-      for (const script of extractScripts(source)) {
-        runDetectors(parse(script.lang, script.code).root(), null, emit);
-      }
-    } else {
-      const sourceFile = baseContext?.program.getSourceFile(file);
-      const types: TypeContext | null =
-        baseContext && sourceFile ? { ...baseContext, sourceFile } : null;
-      runDetectors(parse(langForFile(file), source).root(), types, emit);
-    }
+    const sourceFile = hasEmbeddedScripts(file)
+      ? undefined
+      : baseContext?.program.getSourceFile(file);
+    const types: TypeContext | null =
+      baseContext && sourceFile ? { ...baseContext, sourceFile } : null;
+    const found = detectInFile(file, source, types);
 
     if (found.size > 0) {
       results.set(file, found);
@@ -145,9 +169,7 @@ export async function detectFeatures(
   return results;
 }
 
-async function collectFeatureIds(
-  input: Map<string, Set<string>>,
-): Promise<Set<string>> {
+function collectFeatureIds(input: Map<string, Set<string>>): Set<string> {
   const all = new Set<string>();
   for (const ids of input.values()) {
     for (const id of ids) {
@@ -163,10 +185,10 @@ function baselineStatusOf(featureId: string): BaselineStatus | null {
   return feature.status.baseline;
 }
 
-export async function detectBaselineTargetForFeatures(
+export function detectBaselineTargetForFeatures(
   input: Map<string, Set<string>>,
-): Promise<BaselineTarget> {
-  const ids = await collectFeatureIds(input);
+): BaselineTarget {
+  const ids = collectFeatureIds(input);
 
   let target: BaselineTarget = { status: 'high', reason: null };
   for (const id of ids) {
@@ -177,18 +199,27 @@ export async function detectBaselineTargetForFeatures(
   return target;
 }
 
+export function detectBaselineTargetForSource(
+  source: string,
+  options?: DetectSourceOptions,
+): BaselineTarget {
+  const result = detectFeaturesForSource(source, options);
+  const target = detectBaselineTargetForFeatures(result);
+  return target;
+}
+
 export async function detectBaselineTarget(
   options?: DetectOptions,
 ): Promise<BaselineTarget> {
   const result = await detectFeatures(options);
-  const target = await detectBaselineTargetForFeatures(result);
+  const target = detectBaselineTargetForFeatures(result);
   return target;
 }
 
-export async function detectBaselineYearForFeatures(
+export function detectBaselineYearForFeatures(
   input: Map<string, Set<string>>,
-): Promise<number | null> {
-  const ids = await collectFeatureIds(input);
+): number | null {
+  const ids = collectFeatureIds(input);
 
   let year: number | null = null;
   for (const id of ids) {
@@ -206,10 +237,19 @@ export async function detectBaselineYearForFeatures(
   return year;
 }
 
+export function detectBaselineYearForSource(
+  source: string,
+  options?: DetectSourceOptions,
+): number | null {
+  const result = detectFeaturesForSource(source, options);
+  const year = detectBaselineYearForFeatures(result);
+  return year;
+}
+
 export async function detectBaselineYear(
   options?: DetectOptions,
 ): Promise<number | null> {
   const result = await detectFeatures(options);
-  const year = await detectBaselineYearForFeatures(result);
+  const year = detectBaselineYearForFeatures(result);
   return year;
 }
