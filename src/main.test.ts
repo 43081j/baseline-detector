@@ -20,6 +20,7 @@ const KNOWN_UNDETECTED = new Set([
   'top-level-await', // needs "await outside any function" analysis; no baseline date
   'unicode-point-escapes', // lives inside string-literal contents
   'import-defer', // Waiting for tree-sitter-javascript/tree-sitter-typescript support
+  'retriable-module-loading', // runtime behaviour (failed imports not cached)
 ]);
 
 function isDetected(compatFeatures: string[]): boolean {
