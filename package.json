@@ -55,9 +55,9 @@
     "vitest": "^5.0.2"
   },
   "dependencies": {
-    "@ast-grep/napi": "^0.45.3",
-    "ignore": "^7.0.10",
-    "web-features": "^3.40.0"
+    "@ast-grep/napi": "^0.51.0",
+    "ignore": "^7.0.14",
+    "web-features": "^3.44.0"
   },
   "peerDependencies": {
     "typescript": "^6.0.3"
